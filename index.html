@@ -81,7 +81,7 @@
       osc.frequency.setValueAtTime(startFreq,now);
       osc.frequency.exponentialRampToValueAtTime(endFreq,now+0.085);
       gain.gain.setValueAtTime(0.001,now);
-      gain.gain.linearRampToValueAtTime(type==='capture'?0.22:0.16,now+0.01);
+      gain.gain.linearRampToValueAtTime(type==='capture'?0.75:0.9,now+0.01);
       gain.gain.exponentialRampToValueAtTime(0.0008,now+0.11);
       osc.connect(gain);
       gain.connect(ctx.destination);
