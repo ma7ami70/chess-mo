@@ -4,8 +4,10 @@ from aiohttp import web
 
 rooms = {}  # room_code -> {"clients": set(), "moves": [], "colors": {}}
 
+
 async def serve_index(request):
     return web.FileResponse("./index.html")
+
 
 async def ws_handler(request):
     ws = web.WebSocketResponse()
@@ -28,6 +30,11 @@ async def ws_handler(request):
     def player_count():
         return sum(1 for c in room["colors"].values() if c in ("w", "b"))
 
+    async def broadcast_others(payload):
+        for peer in list(room["clients"]):
+            if peer is not ws and not peer.closed:
+                await peer.send_json(payload)
+
     await ws.send_json({
         "type": "welcome",
         "room": room_code,
@@ -36,9 +43,7 @@ async def ws_handler(request):
         "players": player_count()
     })
 
-    for peer in list(room["clients"]):
-        if peer is not ws:
-            await peer.send_json({"type": "presence", "players": player_count()})
+    await broadcast_others({"type": "presence", "players": player_count()})
 
     try:
         async for msg in ws:
@@ -56,21 +61,33 @@ async def ws_handler(request):
                         "promo": data.get("promo")
                     }
                     room["moves"].append(move_obj)
-                    for peer in list(room["clients"]):
-                        if peer is not ws:
-                            await peer.send_json({"type": "move", **move_obj})
+                    await broadcast_others({"type": "move", **move_obj})
+
+                elif msg_type == "reset_request":
+                    await broadcast_others({"type": "reset_request"})
+
+                elif msg_type == "reset_accept":
+                    room["moves"] = []
+                    await broadcast_others({"type": "reset_accept"})
+
+                elif msg_type == "reset_decline":
+                    await broadcast_others({"type": "reset_decline"})
 
                 elif msg_type == "reset":
                     room["moves"] = []
                     for peer in list(room["clients"]):
-                        await peer.send_json({"type": "reset"})
+                        if not peer.closed:
+                            await peer.send_json({"type": "reset"})
     finally:
         room["clients"].discard(ws)
         room["colors"].pop(ws, None)
-        for peer in list(room["clients"]):
-            await peer.send_json({"type": "presence", "players": player_count()})
+        if not room["clients"]:
+            rooms.pop(room_code, None)
+        else:
+            await broadcast_others({"type": "presence", "players": player_count()})
 
     return ws
+
 
 app = web.Application()
 app.router.add_get("/", serve_index)
