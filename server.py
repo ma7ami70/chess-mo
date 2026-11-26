@@ -1,12 +1,19 @@
 import asyncio
+from datetime import datetime, timezone
 import json
 import math
 import os
 import random
+import time
 from aiohttp import web
 
 rooms = {}  # room_code -> {"clients": set(), "moves": [], "colors": {}}
 pong_rooms = {}  # room_code -> PongRoom
+
+SUGGESTIONS_FILE = os.environ.get(
+    "SUGGESTIONS_FILE",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "suggestions.jsonl"),
+)
 
 PONG_WIDTH = 2000
 PONG_HEIGHT = 600
@@ -17,6 +24,29 @@ PADDLE_RIGHT_X = PONG_WIDTH - 30 - PADDLE_WIDTH
 BALL_RADIUS = 8
 WINNING_SCORE = 7
 TICK_INTERVAL = 0.04  # 25 Hz server tick
+MAX_SUBSTEP = 0.01  # 10 ms physics sub-step
+
+
+def save_suggestion(text: str, room_code: str = "", extra: dict | None = None):
+    cleaned = " ".join(str(text).split()).strip()[:500]
+    if not cleaned:
+        return None
+    raw_name = (extra or {}).get("playerName", "")
+    clean_name = " ".join(str(raw_name).split()).strip()[:40] or "Anonymous"
+    merged_extra = {**(extra or {}), "playerName": clean_name}
+    entry = {
+        "time": datetime.now(timezone.utc).isoformat(),
+        "room": str(room_code)[:16],
+        "suggestion": cleaned,
+        **merged_extra,
+    }
+    print(
+        f"\n[DEV FEEDBACK] from {clean_name} (room {entry['room'] or 'local'}): {cleaned}\n",
+        flush=True,
+    )
+    with open(SUGGESTIONS_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    return entry
 
 
 class PongRoom:
@@ -117,6 +147,56 @@ class PongRoom:
         self.vy = 0.0
         self.next_direction = 1 if left_won else -1
 
+    def _step_ball_substep(self, dt: float, sounds: list) -> bool:
+        prev_x = self.bx
+        prev_y = self.by
+        self.bx += self.vx * dt
+        self.by += self.vy * dt
+
+        if self.by - BALL_RADIUS <= 0 and self.vy < 0:
+            self.by = BALL_RADIUS
+            self.vy *= -1
+            sounds.append([260, 0.025, "sine"])
+        elif self.by + BALL_RADIUS >= PONG_HEIGHT and self.vy > 0:
+            self.by = PONG_HEIGHT - BALL_RADIUS
+            self.vy *= -1
+            sounds.append([260, 0.025, "sine"])
+
+        left_face = PADDLE_LEFT_X + PADDLE_WIDTH + BALL_RADIUS
+        if self.vx < 0 and prev_x - BALL_RADIUS >= PADDLE_LEFT_X and self.bx - BALL_RADIUS <= left_face:
+            span = max(1e-6, prev_x - self.bx)
+            t = max(0.0, min(1.0, (prev_x - BALL_RADIUS - left_face) / span))
+            cross_y = prev_y + (self.by - prev_y) * t
+            if (
+                (cross_y + BALL_RADIUS >= self.py and cross_y - BALL_RADIUS <= self.py + PADDLE_HEIGHT)
+                or (self.by + BALL_RADIUS >= self.py and self.by - BALL_RADIUS <= self.py + PADDLE_HEIGHT)
+            ):
+                self.by = cross_y
+                self._hit_paddle(self.py, 1, sounds)
+                return False
+
+        right_face = PADDLE_RIGHT_X - BALL_RADIUS
+        if self.vx > 0 and prev_x + BALL_RADIUS <= PADDLE_RIGHT_X + PADDLE_WIDTH and self.bx + BALL_RADIUS >= right_face:
+            span = max(1e-6, self.bx - prev_x)
+            t = max(0.0, min(1.0, (right_face - (prev_x + BALL_RADIUS)) / span))
+            cross_y = prev_y + (self.by - prev_y) * t
+            if (
+                (cross_y + BALL_RADIUS >= self.cy and cross_y - BALL_RADIUS <= self.cy + PADDLE_HEIGHT)
+                or (self.by + BALL_RADIUS >= self.cy and self.by - BALL_RADIUS <= self.cy + PADDLE_HEIGHT)
+            ):
+                self.by = cross_y
+                self._hit_paddle(self.cy, -1, sounds)
+                return False
+
+        if self.bx < -BALL_RADIUS:
+            self._score_point(False, sounds)
+            return True
+        if self.bx > PONG_WIDTH + BALL_RADIUS:
+            self._score_point(True, sounds)
+            return True
+
+        return False
+
     def step(self, delta: float) -> tuple[bool, list]:
         sounds: list = []
         if not self.is_ready():
@@ -131,39 +211,11 @@ class PongRoom:
         if self.paused or self.game_over:
             return False, sounds
 
-        self.bx += self.vx * delta
-        self.by += self.vy * delta
-
-        if self.by - BALL_RADIUS <= 0 and self.vy < 0:
-            self.by = BALL_RADIUS
-            self.vy *= -1
-            sounds.append([260, 0.025, "sine"])
-        elif self.by + BALL_RADIUS >= PONG_HEIGHT and self.vy > 0:
-            self.by = PONG_HEIGHT - BALL_RADIUS
-            self.vy *= -1
-            sounds.append([260, 0.025, "sine"])
-
-        if (
-            self.vx < 0
-            and self.bx - BALL_RADIUS <= PADDLE_LEFT_X + PADDLE_WIDTH
-            and self.bx > PADDLE_LEFT_X
-            and self.by + BALL_RADIUS >= self.py
-            and self.by - BALL_RADIUS <= self.py + PADDLE_HEIGHT
-        ):
-            self._hit_paddle(self.py, 1, sounds)
-        elif (
-            self.vx > 0
-            and self.bx + BALL_RADIUS >= PADDLE_RIGHT_X
-            and self.bx < PADDLE_RIGHT_X + PADDLE_WIDTH
-            and self.by + BALL_RADIUS >= self.cy
-            and self.by - BALL_RADIUS <= self.cy + PADDLE_HEIGHT
-        ):
-            self._hit_paddle(self.cy, -1, sounds)
-
-        if self.bx < -BALL_RADIUS:
-            self._score_point(False, sounds)
-        elif self.bx > PONG_WIDTH + BALL_RADIUS:
-            self._score_point(True, sounds)
+        substeps = max(1, math.ceil(delta / MAX_SUBSTEP))
+        dt = delta / substeps
+        for _ in range(substeps):
+            if self._step_ball_substep(dt, sounds):
+                break
 
         return True, sounds
 
@@ -220,6 +272,26 @@ async def serve_pong(request):
     return web.FileResponse("./pong.html")
 
 
+async def post_suggestion(request):
+    try:
+        data = await request.json()
+    except ValueError:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+
+    saved = save_suggestion(
+        data.get("text", ""),
+        data.get("room", "local"),
+        {
+            "playerName": data.get("playerName", ""),
+            "side": str(data.get("side", ""))[:16],
+            "mode": str(data.get("mode", ""))[:32],
+        },
+    )
+    if not saved:
+        return web.json_response({"ok": False, "error": "Empty suggestion"}, status=400)
+    return web.json_response({"ok": True})
+
+
 async def ws_handler(request):
     ws = web.WebSocketResponse()
     await ws.prepare(request)
@@ -259,7 +331,10 @@ async def ws_handler(request):
     try:
         async for msg in ws:
             if msg.type == web.WSMsgType.TEXT:
-                data = json.loads(msg.data)
+                try:
+                    data = json.loads(msg.data)
+                except ValueError:
+                    continue
                 msg_type = data.get("type")
 
                 if msg_type == "move":
@@ -321,6 +396,7 @@ async def ws_pong_handler(request):
 
     room.clients.add(ws)
     room.sides[ws] = side
+    last_suggestion_at = 0.0
 
     if not room.is_ready():
         room.reset_match_state(keep_scores=False)
@@ -339,11 +415,19 @@ async def ws_pong_handler(request):
     try:
         async for msg in ws:
             if msg.type == web.WSMsgType.TEXT:
-                data = json.loads(msg.data)
+                try:
+                    data = json.loads(msg.data)
+                except ValueError:
+                    continue
                 mtype = data.get("type")
 
                 if mtype == "paddle" and side in ("left", "right"):
-                    y_val = float(data.get("y", PONG_HEIGHT / 2 - PADDLE_HEIGHT / 2))
+                    try:
+                        y_val = float(data.get("y", PONG_HEIGHT / 2 - PADDLE_HEIGHT / 2))
+                    except (TypeError, ValueError):
+                        continue
+                    if not math.isfinite(y_val):
+                        continue
                     y_val = max(0.0, min(PONG_HEIGHT - PADDLE_HEIGHT, y_val))
                     if side == "left":
                         room.py = y_val
@@ -366,6 +450,23 @@ async def ws_pong_handler(request):
                     room.reset_match_state(keep_scores=False)
                     room.serve()
                     await room.broadcast_state()
+
+                elif mtype == "suggestion":
+                    now = time.monotonic()
+                    if now - last_suggestion_at < 3.0:
+                        continue
+                    saved = save_suggestion(
+                        data.get("text", ""),
+                        room_code,
+                        {
+                            "playerName": data.get("playerName", ""),
+                            "side": side,
+                            "mode": str(data.get("mode", ""))[:32],
+                        },
+                    )
+                    if saved and not ws.closed:
+                        last_suggestion_at = now
+                        await ws.send_json({"type": "suggestion_saved", "ok": True})
 
                 elif mtype == "state":
                     if not room.is_ready():
@@ -395,6 +496,7 @@ app.router.add_get("/", serve_index)
 app.router.add_get("/ws", ws_handler)
 app.router.add_get("/pong", serve_pong)
 app.router.add_get("/ws-pong", ws_pong_handler)
+app.router.add_post("/api/suggestion", post_suggestion)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
