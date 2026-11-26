@@ -23,15 +23,15 @@
   button.mode-active{background:var(--pink);color:#14060d;border-color:var(--pink)}
   button.online-laptop-active{background:#7ea8ff;color:#071024;border-color:#7ea8ff}
   button.is-muted{opacity:.65}
-  .stage{width:min(100%,1120px);aspect-ratio:16/9;max-height:64dvh;position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--border);box-shadow:0 18px 42px #000a;background:#090f1e;contain:layout style paint}
-  .stage:fullscreen,.stage.pseudo-fs{position:fixed;inset:0;width:100vw;height:100dvh;max-height:none;aspect-ratio:auto;border-radius:0;border:0;z-index:50}
+  .stage{width:min(100%,1120px);aspect-ratio:16/9;max-height:60dvh;position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--border);box-shadow:0 18px 42px #000a;background:#090f1e;contain:layout style paint}
+  .stage:fullscreen{position:fixed;inset:0;width:100vw;height:100dvh;max-height:none;aspect-ratio:auto;border-radius:0;border:0;z-index:50}
   @media (max-width:720px) and (orientation:portrait){
     body{padding:8px;gap:6px}
     .top-bar{padding:7px 8px;gap:5px}
     input,select,button{min-height:36px;padding:5px 9px;font-size:12.5px}
-    .stage{width:100%;aspect-ratio:4/5;max-height:66dvh;border-radius:12px}
+    .stage{width:100%;aspect-ratio:4/5;max-height:60dvh;border-radius:12px}
     .touch-pad{gap:8px}
-    .touch-btn{min-height:50px;font-size:14px}
+    .touch-btn{min-height:48px;font-size:14px}
   }
   .fs-exit-btn{display:none}
   .hud{position:absolute;top:10px;left:14px;right:14px;display:flex;align-items:flex-start;justify-content:space-between;pointer-events:none;z-index:2}
@@ -43,20 +43,182 @@
   .scoreboard span:last-child{color:var(--pink)}
   canvas{width:100%;height:100%;display:block}
   .overlay{position:absolute;inset:0;background:#070c18f0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:18px;gap:8px;z-index:3}
+  .overlay.modal-backdrop{background:rgba(7,12,24,.78);backdrop-filter:blur(3px)}
   .overlay[hidden]{display:none}
   .kicker{font-size:11px;letter-spacing:2px;font-weight:700;color:var(--cyan)}
   .overlay h2{margin:0;font-size:clamp(20px,4vw,34px)}
   .overlay p{margin:0 0 8px;color:var(--muted);max-width:420px;font-size:13px}
+  .gate-box{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:4px}
+  .gate-input{width:150px;text-align:center;letter-spacing:3px;font-weight:700}
+  .gate-error{min-height:16px;color:#ff859d;font-size:12px}
+
+  .concept-box{
+    position:relative;
+    width:min(100%,460px);
+    background:#ffffff;
+    color:#111827;
+    border-radius:10px;
+    padding:34px 28px 28px;
+    box-shadow:0 24px 60px rgba(0,0,0,.48);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    text-align:center;
+    gap:12px;
+    opacity:0;
+    transform:translateY(10px) scale(.985);
+    animation:conceptModalReveal .35s cubic-bezier(.2,.8,.2,1) forwards;
+  }
+  .concept-box[hidden]{display:none}
+  .concept-close{
+    position:absolute;
+    top:10px;
+    right:10px;
+    min-height:32px;
+    width:32px;
+    padding:0;
+    border-radius:999px;
+    background:transparent;
+    border:0;
+    color:#4b5563;
+    font-size:18px;
+    line-height:1;
+    font-weight:600;
+  }
+  .concept-close:hover:not(:disabled){
+    background:#f3f4f6;
+    color:#111827;
+    border:0;
+  }
+  .concept-title{
+    margin:0;
+    font-size:clamp(24px,4.2vw,32px);
+    line-height:1.15;
+    font-weight:800;
+    letter-spacing:-.02em;
+    color:#0f172a;
+    opacity:0;
+    transform:translateY(8px);
+    animation:staggerItem .4s ease .05s forwards;
+  }
+  .concept-copy{
+    margin:0;
+    max-width:360px;
+    color:#4b5563;
+    font-size:13.5px;
+    line-height:1.5;
+    white-space:pre-line;
+    opacity:0;
+    transform:translateY(8px);
+    animation:staggerItem .45s ease .16s forwards;
+  }
+  .concept-name-input{
+    width:min(100%,300px);
+    min-height:42px;
+    padding:8px 12px;
+    border-radius:6px;
+    background:#ffffff;
+    color:#111827;
+    border:1px solid #cbd5e1;
+    font-size:14px;
+    text-align:left;
+    user-select:text;
+    -webkit-user-select:text;
+    opacity:0;
+    transform:translateY(8px);
+    animation:staggerItem .45s ease .26s forwards;
+  }
+  .concept-name-input::placeholder{color:#9ca3af}
+  .concept-name-input:focus{
+    outline:none;
+    border-color:#1d4ed8;
+    box-shadow:0 0 0 3px rgba(29,78,216,.15);
+  }
+  .concept-start{
+    width:min(100%,300px);
+    min-height:44px;
+    padding:10px 20px;
+    border-radius:6px;
+    background:#1d4ed8;
+    border:1px solid #1d4ed8;
+    color:#ffffff;
+    font-size:13.5px;
+    font-weight:700;
+    letter-spacing:.4px;
+    opacity:0;
+    transform:translateY(8px);
+    animation:staggerItem .45s ease .35s forwards;
+  }
+  .concept-start:hover:not(:disabled){
+    background:#1e40af;
+    border-color:#1e40af;
+  }
+  @keyframes conceptModalReveal{
+    to{opacity:1;transform:translateY(0) scale(1)}
+  }
+  @keyframes staggerItem{
+    to{opacity:1;transform:translateY(0)}
+  }
+
+  .server-modal{
+    width:min(100%,440px);
+    background:#101b34;
+    color:var(--text);
+    border:1px solid #32497a;
+    border-radius:14px;
+    padding:22px 20px;
+    box-shadow:0 24px 60px rgba(0,0,0,.6);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    text-align:center;
+    gap:10px;
+    animation:conceptModalReveal .28s ease forwards;
+  }
+  .server-modal[hidden]{display:none}
+  .server-code-pill{
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:24px;
+    font-weight:800;
+    letter-spacing:4px;
+    padding:8px 18px;
+    border-radius:10px;
+    background:#091124;
+    border:1px solid var(--cyan);
+    color:var(--cyan);
+  }
+  .server-code-row{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .countdown-num{
+    font-size:clamp(54px,12vw,92px);
+    font-weight:900;
+    line-height:1;
+    color:var(--cyan);
+    text-shadow:0 0 28px rgba(103,245,223,.35);
+    animation:conceptModalReveal .24s ease forwards;
+  }
+
   .touch-pad{display:grid;width:100%;max-width:1120px;grid-template-columns:1fr 1fr;gap:10px}
-  .touch-btn{min-height:54px;font-size:15px;font-weight:800;border-radius:12px;background:#13203d;border:1px solid #354b7a;color:var(--text)}
+  .touch-btn{min-height:52px;font-size:15px;font-weight:800;border-radius:12px;background:#13203d;border:1px solid #354b7a;color:var(--text)}
   .touch-btn.active{background:var(--cyan);color:#06131c;border-color:var(--cyan)}
+  .dev-box{width:min(100%,1120px);padding:9px 12px;background:var(--panel);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;gap:6px;touch-action:auto;user-select:auto;-webkit-user-select:auto}
+  .dev-prompt{font-size:12.5px;color:var(--muted)}
+  .dev-prompt strong{color:var(--cyan)}
+  .dev-row{display:flex;gap:6px;align-items:center}
+  .dev-input{flex:1;min-width:0;user-select:text;-webkit-user-select:text}
+  .dev-status{font-size:12px;color:var(--cyan);min-height:16px}
 </style>
 </head>
 <body>
   <div class="top-bar">
     <div class="brand">
       <strong>PONG DUO</strong>
-      <span class="meta" id="statusLabel">Connecting…</span>
+      <span class="meta" id="statusLabel">Locked</span>
     </div>
     <div class="actions">
       <input id="roomInput" type="text" maxlength="12" style="width:78px" placeholder="Room">
@@ -75,13 +237,13 @@
 
   <div class="stage" id="stage">
     <div class="hud">
-      <div><div class="side-tag left-c">LEFT SCREEN</div></div>
+      <div><div class="side-tag left-c" id="leftSideTag">LEFT SCREEN</div></div>
       <div class="scoreboard">
         <span id="playerScore">0</span>
         <span style="color:var(--muted);font-size:.65em">:</span>
         <span id="cpuScore">0</span>
       </div>
-      <div style="text-align:right"><div class="side-tag right-c">RIGHT SCREEN</div></div>
+      <div style="text-align:right"><div class="side-tag right-c" id="rightSideTag">RIGHT SCREEN</div></div>
     </div>
 
     <canvas id="gameCanvas" width="1000" height="600"></canvas>
@@ -90,6 +252,39 @@
       <div class="kicker" id="overlayKicker">TWO-SCREEN LOBBY</div>
       <h2 id="overlayTitle">Waiting for Player 2…</h2>
       <p id="overlayText">Open /pong on the second screen and enter the same room code.</p>
+
+      <div class="gate-box" id="passcodeGate" hidden>
+        <input id="passcodeInput" class="gate-input" type="password" inputmode="numeric" maxlength="12" placeholder="Passcode" autocomplete="off">
+        <div class="gate-error" id="passcodeError"></div>
+        <button class="primary" id="passcodeSubmit" type="button">Unlock</button>
+      </div>
+
+      <div class="concept-box" id="conceptIntro" role="dialog" aria-modal="true" aria-labelledby="conceptTitle" hidden>
+        <button class="concept-close" id="closeConceptButton" type="button" aria-label="Close popup">×</button>
+        <h2 class="concept-title" id="conceptTitle">Well well well...</h2>
+        <p class="concept-copy" id="conceptText">So i had an idea.
+
+What if we actually put all those phones to some good use? Everyone gets to join from their own device and we get to play a bunch of little games together</p>
+        <input id="testerNameInput" class="concept-name-input" type="text" maxlength="40" placeholder="Write your name" autocomplete="name">
+        <button class="concept-start" id="startTestButton" type="button">START TEST</button>
+      </div>
+
+      <div class="server-modal" id="serverPopup" role="dialog" aria-modal="true" aria-labelledby="serverPopupTitle" hidden>
+        <div class="kicker" id="serverPopupKicker">SERVER &amp; ROOM CODE</div>
+        <h2 id="serverPopupTitle">Room Ready</h2>
+        <p id="serverPopupText">Share this code with your friend so 2 players join the room.</p>
+        <div class="server-code-pill" id="serverCodeDisplay">1000</div>
+        <div class="server-code-row">
+          <button id="copyCodeButton" type="button">Copy Code</button>
+          <button id="newCodeButton" type="button">New Code</button>
+          <button id="modalTwoLaptopsButton" type="button">2 Laptops</button>
+        </div>
+        <div class="meta" id="serverPlayersMeta">Players in room: 1/2</div>
+        <button class="primary" id="startGameButton" type="button" disabled>WAITING FOR PLAYER 2…</button>
+      </div>
+
+      <div class="countdown-num" id="countdownDisplay" hidden>3</div>
+
       <button class="primary" id="overlayButton" type="button" disabled>SERVE BALL →</button>
     </div>
   </div>
@@ -99,15 +294,32 @@
     <button class="touch-btn" id="touchDown" type="button">▼ MOVE DOWN</button>
   </div>
 
+  <div class="dev-box" id="devFeedbackBox">
+    <div class="dev-prompt" id="devPrompt">Since you're one of our <strong>early testers</strong>, we'd love to hear your opinion — leave a suggestion!</div>
+    <div class="dev-row">
+      <input id="devSuggestionInput" class="dev-input" type="text" maxlength="500" placeholder="Share an idea, bug, or quick thought…">
+      <button id="sendDevButton" class="primary" type="button">Send to the Dev</button>
+    </div>
+    <div class="dev-status" id="devStatus"></div>
+  </div>
+
 <script>
 (() => {
+  const PONG_PASSCODE = '0102';
+  const PONG_AUTH_KEY = 'chessmo_pong_auth';
+  const PONG_INTRO_SEEN_KEY = 'chessmo_pong_intro_seen';
+  const PONG_TESTER_NAME_KEY = 'chessmo_pong_tester_name';
+
   const stage = document.getElementById('stage');
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d', { alpha: false });
+  const leftSideTag = document.getElementById('leftSideTag');
+  const rightSideTag = document.getElementById('rightSideTag');
   const playerScoreEl = document.getElementById('playerScore');
   const cpuScoreEl = document.getElementById('cpuScore');
   const statusLabel = document.getElementById('statusLabel');
   const roomInput = document.getElementById('roomInput');
+  const joinButton = document.getElementById('joinButton');
   const twoLaptopsButton = document.getElementById('twoLaptopsButton');
   const onlineLaptopsButton = document.getElementById('onlineLaptopsButton');
   const viewSelect = document.getElementById('viewSelect');
@@ -115,12 +327,35 @@
   const overlayKicker = document.getElementById('overlayKicker');
   const overlayTitle = document.getElementById('overlayTitle');
   const overlayText = document.getElementById('overlayText');
+  const passcodeGate = document.getElementById('passcodeGate');
+  const passcodeInput = document.getElementById('passcodeInput');
+  const passcodeError = document.getElementById('passcodeError');
+  const passcodeSubmit = document.getElementById('passcodeSubmit');
+  const conceptIntro = document.getElementById('conceptIntro');
+  const closeConceptButton = document.getElementById('closeConceptButton');
+  const testerNameInput = document.getElementById('testerNameInput');
+  const startTestButton = document.getElementById('startTestButton');
+  const serverPopup = document.getElementById('serverPopup');
+  const serverPopupKicker = document.getElementById('serverPopupKicker');
+  const serverPopupTitle = document.getElementById('serverPopupTitle');
+  const serverPopupText = document.getElementById('serverPopupText');
+  const serverCodeDisplay = document.getElementById('serverCodeDisplay');
+  const copyCodeButton = document.getElementById('copyCodeButton');
+  const newCodeButton = document.getElementById('newCodeButton');
+  const modalTwoLaptopsButton = document.getElementById('modalTwoLaptopsButton');
+  const serverPlayersMeta = document.getElementById('serverPlayersMeta');
+  const startGameButton = document.getElementById('startGameButton');
+  const countdownDisplay = document.getElementById('countdownDisplay');
   const overlayButton = document.getElementById('overlayButton');
   const pauseButton = document.getElementById('pauseButton');
   const soundButton = document.getElementById('soundButton');
   const fullscreenButton = document.getElementById('fullscreenButton');
   const touchUp = document.getElementById('touchUp');
   const touchDown = document.getElementById('touchDown');
+  const devPrompt = document.getElementById('devPrompt');
+  const devSuggestionInput = document.getElementById('devSuggestionInput');
+  const sendDevButton = document.getElementById('sendDevButton');
+  const devStatus = document.getElementById('devStatus');
 
   const WIDTH = 2000;
   const HEIGHT = 600;
@@ -131,12 +366,24 @@
 
   const isTouchOrSmall = window.matchMedia('(max-width: 720px) or (pointer: coarse)').matches;
   const lowPower = isTouchOrSmall || !!navigator.connection?.saveData || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
-  const PADDLE_SEND_INTERVAL_MS = isTouchOrSmall ? 24 : 16;
+  const PADDLE_SEND_INTERVAL_MS = isTouchOrSmall ? 16 : 12;
   const TRAIL_LENGTH = lowPower ? 3 : 7;
 
   const courtGradient = ctx.createLinearGradient(0, 0, 0, HEIGHT);
   courtGradient.addColorStop(0, '#0c1428');
   courtGradient.addColorStop(1, '#090f1e');
+
+  let unlocked = false;
+  try { unlocked = sessionStorage.getItem(PONG_AUTH_KEY) === '1'; } catch (_) {}
+  let conceptSeen = false;
+  try { conceptSeen = sessionStorage.getItem(PONG_INTRO_SEEN_KEY) === '1'; } catch (_) {}
+  if (conceptSeen) unlocked = true;
+
+  let testerName = '';
+  try {
+    testerName = sessionStorage.getItem(PONG_TESTER_NAME_KEY) || '';
+    if (testerName) testerNameInput.value = testerName;
+  } catch (_) {}
 
   let side = 'left';
   let playersCount = 1;
@@ -146,10 +393,15 @@
   let ws = null;
   let lastPaddleSent = 0;
   let lastSentPaddleY = null;
+  let autoFullscreenAttempted = false;
+  let needsFullscreenRelock = false;
+  let conceptAnimatedOnce = false;
+  let countdownTimer = null;
+  let countdownValue = null;
 
   let playerScore = 0;
   let cpuScore = 0;
-  let paused = false;
+  let paused = true;
   let gameOver = false;
   let lastFrame = 0;
   let pointPause = 0;
@@ -164,10 +416,41 @@
   const ball = { x: WIDTH / 2, y: HEIGHT / 2, vx: 0, vy: 0, speed: 430, trail: [], nextDirection: 1 };
   const remoteTarget = { py: player.y, cy: cpu.y, bx: ball.x, by: ball.y };
 
-  roomInput.value = String(Math.floor(1000 + Math.random() * 9000));
+  function generateRoomCode() {
+    return String(Math.floor(1000 + Math.random() * 9000));
+  }
+
+  roomInput.value = generateRoomCode();
+  serverCodeDisplay.textContent = roomInput.value;
 
   function usesNetwork() {
-    return !twoLaptopsMode;
+    return unlocked && conceptSeen && !twoLaptopsMode;
+  }
+
+  function currentModeName() {
+    if (twoLaptopsMode) return '2-laptops-local';
+    if (onlineLaptopsMode) return '2-online-laptops';
+    return '2-screen-room';
+  }
+
+  function isTwoPlayerActive() {
+    return unlocked && conceptSeen && (twoLaptopsMode || (matchReady && side !== 'spectator'));
+  }
+
+  function refreshTesterLabels() {
+    const cleanName = (testerNameInput.value || testerName || '').trim();
+    leftSideTag.textContent = (!twoLaptopsMode && side === 'left' && cleanName)
+      ? `LEFT SCREEN • ${cleanName}`
+      : 'LEFT SCREEN';
+    rightSideTag.textContent = (!twoLaptopsMode && side === 'right' && cleanName)
+      ? `RIGHT SCREEN • ${cleanName}`
+      : 'RIGHT SCREEN';
+
+    if (cleanName) {
+      devPrompt.innerHTML = `Since you're one of our <strong>early testers</strong> (<strong>${cleanName}</strong>), we'd love to hear your opinion — leave a suggestion!`;
+    } else {
+      devPrompt.innerHTML = `Since you're one of our <strong>early testers</strong>, we'd love to hear your opinion — leave a suggestion!`;
+    }
   }
 
   function playTone(frequency = 440, duration = 0.045, type = 'sine') {
@@ -197,6 +480,45 @@
     }
   }
 
+  async function submitSuggestionToDev() {
+    const text = devSuggestionInput.value.trim();
+    if (!text) return;
+    const currentName = (testerNameInput.value || testerName || '').trim();
+    sendDevButton.disabled = true;
+    devStatus.textContent = 'Sending to the dev…';
+
+    const payload = {
+      type: 'suggestion',
+      text,
+      playerName: currentName || undefined,
+      room: roomInput.value.trim() || 'local',
+      side: twoLaptopsMode ? 'local' : side,
+      mode: currentModeName(),
+    };
+
+    try {
+      if (usesNetwork() && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(payload));
+      } else {
+        const res = await fetch('/api/suggestion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('Failed');
+      }
+      devSuggestionInput.value = '';
+      devStatus.textContent = 'Sent to the dev — thanks for testing!';
+    } catch (_) {
+      devStatus.textContent = 'Could not send right now — try again.';
+    } finally {
+      sendDevButton.disabled = false;
+      setTimeout(() => {
+        if (devStatus.textContent.startsWith('Sent')) devStatus.textContent = '';
+      }, 3500);
+    }
+  }
+
   function updateScore() {
     playerScoreEl.textContent = playerScore;
     cpuScoreEl.textContent = cpuScore;
@@ -206,79 +528,295 @@
     return leftWon ? 'NICE PLAY' : 'GAME OVER';
   }
 
+  function lockArenaFullscreen(force = false) {
+    if (!force && document.fullscreenElement) {
+      needsFullscreenRelock = false;
+      return Promise.resolve(true);
+    }
+    if (document.fullscreenElement) {
+      needsFullscreenRelock = false;
+      return Promise.resolve(true);
+    }
+    const req = stage.requestFullscreen?.() || document.documentElement.requestFullscreen?.();
+    if (!req || typeof req.then !== 'function') {
+      needsFullscreenRelock = true;
+      return Promise.resolve(false);
+    }
+    return req
+      .then(() => {
+        needsFullscreenRelock = false;
+        return true;
+      })
+      .catch(() => {
+        needsFullscreenRelock = true;
+        return false;
+      });
+  }
+
+  function enterStartFullscreen() {
+    if (document.fullscreenElement) return;
+    lockArenaFullscreen(true);
+  }
+
+  function tryStartFullscreenOnce() {
+    if (autoFullscreenAttempted) return;
+    autoFullscreenAttempted = true;
+    enterStartFullscreen();
+  }
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      needsFullscreenRelock = false;
+      document.exitFullscreen?.().catch(() => {});
+      return;
+    }
+    lockArenaFullscreen(true);
+  }
+
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && isTwoPlayerActive()) {
+      needsFullscreenRelock = true;
+    } else if (document.fullscreenElement) {
+      needsFullscreenRelock = false;
+    }
+  });
+
+  window.addEventListener('pointerdown', () => {
+    if (needsFullscreenRelock && isTwoPlayerActive()) {
+      lockArenaFullscreen(true);
+    }
+  }, { capture: true });
+
+  window.addEventListener('keydown', () => {
+    if (needsFullscreenRelock && isTwoPlayerActive()) {
+      lockArenaFullscreen(true);
+    }
+  }, { capture: true });
+
+  function clearCountdown(resetState = true) {
+    if (countdownTimer !== null) {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+    if (resetState) {
+      countdownValue = null;
+    }
+  }
+
+  function startMatchCountdown() {
+    clearCountdown(false);
+    lockArenaFullscreen(true);
+    serverPopup.hidden = true;
+    overlayKicker.hidden = true;
+    overlayTitle.hidden = true;
+    overlayText.hidden = true;
+    overlayButton.hidden = true;
+    countdownDisplay.hidden = false;
+
+    let current = 3;
+    countdownValue = current;
+    countdownDisplay.textContent = String(current);
+    overlay.hidden = false;
+    overlay.classList.add('modal-backdrop');
+    playTone(440, 0.08, 'sine');
+
+    countdownTimer = setInterval(() => {
+      current -= 1;
+      if (current >= 1) {
+        countdownValue = current;
+        countdownDisplay.textContent = String(current);
+        playTone(440, 0.08, 'sine');
+        return;
+      }
+      clearCountdown(true);
+      countdownDisplay.hidden = true;
+      paused = false;
+      requestServe();
+      syncOverlayAndControls();
+    }, 850);
+  }
+
   function syncOverlayAndControls() {
+    refreshTesterLabels();
+    const code = roomInput.value.trim() || '1000';
+    serverCodeDisplay.textContent = code;
     twoLaptopsButton.classList.toggle('mode-active', twoLaptopsMode);
     twoLaptopsButton.textContent = twoLaptopsMode ? '2 Laptops: ON' : '2 Laptops';
+    modalTwoLaptopsButton.classList.toggle('mode-active', twoLaptopsMode);
+    modalTwoLaptopsButton.textContent = twoLaptopsMode ? '2 Laptops: ON' : '2 Laptops';
     onlineLaptopsButton.classList.toggle('online-laptop-active', onlineLaptopsMode && !twoLaptopsMode);
     onlineLaptopsButton.textContent = onlineLaptopsMode ? '2 Online Laptops: ON' : '2 Online Laptops';
 
-    if (twoLaptopsMode) {
-      statusLabel.textContent = '2 Laptops Local • Left vs Right';
-      if (gameOver) {
-        const leftWon = playerScore >= WINNING_SCORE;
-        overlay.hidden = false;
-        overlayKicker.textContent = playerWonText(leftWon);
-        overlayTitle.textContent = leftWon ? 'Left wins!' : 'Right takes this one.';
-        overlayText.textContent = 'Tap below for another round.';
-        overlayButton.disabled = false;
-        overlayButton.textContent = 'PLAY AGAIN ↻';
-        pauseButton.innerHTML = '↻ Play Again';
-        return;
-      }
-      if (paused) {
-        overlay.hidden = false;
-        overlayKicker.textContent = '2 LAPTOPS MODE';
-        overlayTitle.textContent = 'Ready on both sides.';
-        overlayText.textContent = 'Tap below to serve and start.';
-        overlayButton.disabled = false;
-        overlayButton.textContent = (ball.vx === 0 && ball.vy === 0) ? 'SERVE BALL →' : 'RESUME GAME →';
-        pauseButton.innerHTML = '▶ Resume';
-      } else {
-        overlay.hidden = true;
-        pauseButton.innerHTML = '<span class="pause-symbol">Ⅱ</span> Pause';
-      }
-      return;
+    const canStartTwoPlayers = twoLaptopsMode || (matchReady && side !== 'spectator');
+    const whoTag = testerName ? ` • ${testerName}` : '';
+
+    if (canStartTwoPlayers && !document.fullscreenElement) {
+      lockArenaFullscreen(true);
     }
 
-    const roleText = side === 'left' ? 'Left Screen' : side === 'right' ? 'Right Screen' : 'Spectator';
-    const modePrefix = onlineLaptopsMode ? '2 Online Laptops' : '2-Screen Room';
-    statusLabel.textContent = `${modePrefix} • Room ${roomInput.value} (${playersCount}/2) • ${roleText}`;
-
-    if (!matchReady) {
-      paused = true;
+    if (!unlocked) {
+      clearCountdown(true);
+      statusLabel.textContent = 'Test Passcode Required';
       overlay.hidden = false;
-      overlayKicker.textContent = onlineLaptopsMode ? '2 ONLINE LAPTOPS LOBBY' : 'TWO-SCREEN LOBBY';
-      overlayTitle.textContent = `Waiting for Player 2 (${playersCount}/2)…`;
-      overlayText.textContent = `Join room ${roomInput.value} on the second screen to start.`;
+      overlay.classList.remove('modal-backdrop');
+      passcodeGate.hidden = false;
+      conceptIntro.hidden = true;
+      serverPopup.hidden = true;
+      countdownDisplay.hidden = true;
+      overlayKicker.hidden = false;
+      overlayTitle.hidden = false;
+      overlayText.hidden = false;
+      overlayButton.hidden = true;
       overlayButton.disabled = true;
-      overlayButton.textContent = 'WAITING FOR PLAYER 2…';
+      overlayKicker.textContent = 'TEST ACCESS';
+      overlayTitle.textContent = 'Enter Test Passcode';
+      overlayText.textContent = 'This mode is in testing. Enter the passcode to continue.';
       return;
     }
+
+    passcodeGate.hidden = true;
+
+    if (!conceptSeen) {
+      clearCountdown(true);
+      statusLabel.textContent = 'Concept Preview';
+      overlay.hidden = false;
+      overlay.classList.add('modal-backdrop');
+      conceptIntro.hidden = false;
+      serverPopup.hidden = true;
+      countdownDisplay.hidden = true;
+      overlayKicker.hidden = true;
+      overlayTitle.hidden = true;
+      overlayText.hidden = true;
+      overlayButton.hidden = true;
+      overlayButton.disabled = true;
+      if (!conceptAnimatedOnce) {
+        conceptAnimatedOnce = true;
+        conceptIntro.style.animation = 'none';
+        void conceptIntro.offsetWidth;
+        conceptIntro.style.animation = '';
+      }
+      return;
+    }
+
+    conceptIntro.hidden = true;
+
+    if (countdownValue !== null) {
+      statusLabel.textContent = `Starting…${whoTag}`;
+      overlay.hidden = false;
+      overlay.classList.add('modal-backdrop');
+      serverPopup.hidden = true;
+      countdownDisplay.hidden = false;
+      overlayKicker.hidden = true;
+      overlayTitle.hidden = true;
+      overlayText.hidden = true;
+      overlayButton.hidden = true;
+      return;
+    }
+
+    countdownDisplay.hidden = true;
 
     if (gameOver) {
+      serverPopup.hidden = true;
+      overlayKicker.hidden = false;
+      overlayTitle.hidden = false;
+      overlayText.hidden = false;
+      overlayButton.hidden = false;
       const leftWon = playerScore >= WINNING_SCORE;
       overlay.hidden = false;
+      overlay.classList.remove('modal-backdrop');
       overlayKicker.textContent = playerWonText(leftWon);
       overlayTitle.textContent = leftWon ? 'Left wins!' : 'Right takes this one.';
       overlayText.textContent = 'Tap below for another round.';
-      overlayButton.disabled = side === 'spectator';
+      overlayButton.disabled = !canStartTwoPlayers;
       overlayButton.textContent = 'PLAY AGAIN ↻';
       pauseButton.innerHTML = '↻ Play Again';
       return;
     }
 
+    if (!canStartTwoPlayers || (paused && ball.vx === 0 && ball.vy === 0 && playerScore === 0 && cpuScore === 0)) {
+      statusLabel.textContent = twoLaptopsMode
+        ? `2 Laptops Local • Ready${whoTag}`
+        : `Server Room ${code} • ${playersCount}/2 Players${whoTag}`;
+      overlay.hidden = false;
+      overlay.classList.add('modal-backdrop');
+      serverPopup.hidden = false;
+      overlayKicker.hidden = true;
+      overlayTitle.hidden = true;
+      overlayText.hidden = true;
+      overlayButton.hidden = true;
+
+      if (twoLaptopsMode) {
+        serverPopupKicker.textContent = 'LOCAL 2 LAPTOPS SERVER';
+        serverPopupTitle.textContent = 'Both Sides Ready';
+        serverPopupText.textContent = 'Left uses W/S and Right uses Up/Down arrows. Hit Start Game for the countdown.';
+        serverPlayersMeta.textContent = `Players: 2/2 Local${testerName ? ` • ${testerName}` : ''}`;
+        startGameButton.disabled = false;
+        startGameButton.textContent = 'START GAME';
+      } else {
+        const modePrefix = onlineLaptopsMode ? '2 Online Laptops' : 'Server Room';
+        serverPopupKicker.textContent = modePrefix.toUpperCase();
+        serverPopupTitle.textContent = matchReady ? '2 Players Connected!' : `Waiting for Player 2 (${playersCount}/2)…`;
+        serverPopupText.textContent = matchReady
+          ? 'Both players are in the room. Press Start Game to begin the countdown.'
+          : `Open /pong on the second screen and enter room code ${code}.`;
+        serverPlayersMeta.textContent = `Players in room ${code}: ${playersCount}/2 (${side === 'spectator' ? 'Spectator' : side.toUpperCase()}${testerName ? ` • ${testerName}` : ''})`;
+        startGameButton.disabled = !matchReady || side === 'spectator';
+        startGameButton.textContent = matchReady ? 'START GAME' : 'WAITING FOR 2 PLAYERS…';
+      }
+      return;
+    }
+
+    serverPopup.hidden = true;
+    overlayKicker.hidden = false;
+    overlayTitle.hidden = false;
+    overlayText.hidden = false;
+    overlayButton.hidden = false;
+
     if (paused) {
       overlay.hidden = false;
+      overlay.classList.remove('modal-backdrop');
       overlayKicker.textContent = 'GAME PAUSED';
       overlayTitle.textContent = 'Take a breather.';
       overlayText.textContent = 'Tap below when ready.';
-      overlayButton.disabled = side === 'spectator';
+      overlayButton.disabled = side === 'spectator' && !twoLaptopsMode;
       overlayButton.textContent = (ball.vx === 0 && ball.vy === 0) ? 'SERVE BALL →' : 'RESUME GAME →';
       pauseButton.innerHTML = '▶ Resume';
     } else {
       overlay.hidden = true;
+      overlay.classList.remove('modal-backdrop');
       pauseButton.innerHTML = '<span class="pause-symbol">Ⅱ</span> Pause';
     }
+  }
+
+  function unlockWithPasscode() {
+    if (passcodeInput.value.trim() === PONG_PASSCODE) {
+      unlocked = true;
+      conceptSeen = false;
+      passcodeError.textContent = '';
+      try { sessionStorage.setItem(PONG_AUTH_KEY, '1'); } catch (_) {}
+      tryStartFullscreenOnce();
+      syncOverlayAndControls();
+      setTimeout(() => testerNameInput.focus(), 0);
+    } else {
+      passcodeError.textContent = 'Incorrect passcode.';
+      passcodeInput.focus();
+      passcodeInput.select();
+    }
+  }
+
+  function finishConceptIntro() {
+    if (!unlocked) return;
+    testerName = testerNameInput.value.trim();
+    try {
+      sessionStorage.setItem(PONG_AUTH_KEY, '1');
+      sessionStorage.setItem(PONG_INTRO_SEEN_KEY, '1');
+      if (testerName) sessionStorage.setItem(PONG_TESTER_NAME_KEY, testerName);
+      else sessionStorage.removeItem(PONG_TESTER_NAME_KEY);
+    } catch (_) {}
+    conceptSeen = true;
+    lockArenaFullscreen(true);
+    syncOverlayAndControls();
+    if (!twoLaptopsMode) connectRoom();
   }
 
   function applyServerState(s) {
@@ -301,6 +839,9 @@
     playerScore = s.playerScore;
     cpuScore = s.cpuScore;
     gameOver = s.gameOver;
+    if ((ball.vx !== 0 || ball.vy !== 0 || s.pointPause > 0 || s.gameOver) && countdownValue === null) {
+      paused = !!s.gameOver;
+    }
     if (ball.vx === 0 && ball.vy === 0 && !s.gameOver) {
       ball.x = s.bx;
       ball.y = s.by;
@@ -311,7 +852,8 @@
   }
 
   function requestServe() {
-    if (!matchReady || side === 'spectator') return;
+    if (!unlocked || !conceptSeen || (!twoLaptopsMode && (!matchReady || side === 'spectator'))) return;
+    lockArenaFullscreen(true);
     if (twoLaptopsMode) {
       const direction = Math.random() < 0.5 ? -1 : 1;
       ball.x = WIDTH / 2;
@@ -329,17 +871,18 @@
   }
 
   function requestReset() {
-    if (!matchReady || side === 'spectator') return;
+    if (!unlocked || !conceptSeen || (!twoLaptopsMode && (!matchReady || side === 'spectator'))) return;
+    lockArenaFullscreen(true);
     if (twoLaptopsMode) {
       resetMatchVisuals();
-      requestServe();
+      startMatchCountdown();
       return;
     }
     sendWs({ type: 'reset' });
   }
 
   function setPaused(value) {
-    if (gameOver || !matchReady) return;
+    if (!unlocked || !conceptSeen || gameOver || (!twoLaptopsMode && !matchReady)) return;
     if (twoLaptopsMode) {
       paused = value;
       syncOverlayAndControls();
@@ -370,12 +913,72 @@
 
   function hitPaddleLocal(paddle, direction) {
     const relativeHit = (ball.y - (paddle.y + PADDLE_HEIGHT / 2)) / (PADDLE_HEIGHT / 2);
-    const angle = relativeHit * 0.95;
+    const clamped = Math.max(-1, Math.min(1, relativeHit));
+    const angle = clamped * 0.95;
     ball.speed = Math.min(ball.speed + 24, 700);
     ball.vx = Math.cos(angle) * ball.speed * direction;
     ball.vy = Math.sin(angle) * ball.speed;
     ball.x = direction > 0 ? paddle.x + PADDLE_WIDTH + BALL_RADIUS : paddle.x - BALL_RADIUS;
-    playTone(420 + Math.abs(relativeHit) * 180, 0.04, 'square');
+    playTone(420 + Math.abs(clamped) * 180, 0.04, 'square');
+  }
+
+  function stepLocalBall(delta) {
+    const subSteps = Math.max(1, Math.ceil(delta / 0.01));
+    const dt = delta / subSteps;
+    for (let s = 0; s < subSteps; s++) {
+      const prevX = ball.x;
+      const prevY = ball.y;
+      ball.x += ball.vx * dt;
+      ball.y += ball.vy * dt;
+
+      if (ball.y - BALL_RADIUS <= 0 && ball.vy < 0) {
+        ball.y = BALL_RADIUS;
+        ball.vy *= -1;
+        playTone(260, 0.025);
+      } else if (ball.y + BALL_RADIUS >= HEIGHT && ball.vy > 0) {
+        ball.y = HEIGHT - BALL_RADIUS;
+        ball.vy *= -1;
+        playTone(260, 0.025);
+      }
+
+      const leftFace = player.x + PADDLE_WIDTH + BALL_RADIUS;
+      if (ball.vx < 0 && prevX - BALL_RADIUS >= player.x && ball.x - BALL_RADIUS <= leftFace) {
+        const span = Math.max(1e-6, prevX - ball.x);
+        const t = Math.max(0, Math.min(1, (prevX - BALL_RADIUS - leftFace) / span));
+        const crossY = prevY + (ball.y - prevY) * t;
+        if (
+          (crossY + BALL_RADIUS >= player.y && crossY - BALL_RADIUS <= player.y + PADDLE_HEIGHT) ||
+          (ball.y + BALL_RADIUS >= player.y && ball.y - BALL_RADIUS <= player.y + PADDLE_HEIGHT)
+        ) {
+          ball.y = crossY;
+          hitPaddleLocal(player, 1);
+          continue;
+        }
+      }
+
+      const rightFace = cpu.x - BALL_RADIUS;
+      if (ball.vx > 0 && prevX + BALL_RADIUS <= cpu.x + PADDLE_WIDTH && ball.x + BALL_RADIUS >= rightFace) {
+        const span = Math.max(1e-6, ball.x - prevX);
+        const t = Math.max(0, Math.min(1, (rightFace - (prevX + BALL_RADIUS)) / span));
+        const crossY = prevY + (ball.y - prevY) * t;
+        if (
+          (crossY + BALL_RADIUS >= cpu.y && crossY - BALL_RADIUS <= cpu.y + PADDLE_HEIGHT) ||
+          (ball.y + BALL_RADIUS >= cpu.y && ball.y - BALL_RADIUS <= cpu.y + PADDLE_HEIGHT)
+        ) {
+          ball.y = crossY;
+          hitPaddleLocal(cpu, -1);
+          continue;
+        }
+      }
+
+      if (ball.x < -BALL_RADIUS) {
+        scorePointLocal(false);
+        break;
+      } else if (ball.x > WIDTH + BALL_RADIUS) {
+        scorePointLocal(true);
+        break;
+      }
+    }
   }
 
   function emitPaddle(force = false) {
@@ -384,7 +987,7 @@
     if (currentY === null) return;
     const now = performance.now();
     if (!force && now - lastPaddleSent < PADDLE_SEND_INTERVAL_MS) return;
-    if (!force && lastSentPaddleY !== null && Math.abs(currentY - lastSentPaddleY) < 1.5) return;
+    if (!force && lastSentPaddleY !== null && Math.abs(currentY - lastSentPaddleY) < 1.0) return;
     lastPaddleSent = now;
     lastSentPaddleY = currentY;
     sendWs({ type: 'paddle', side, y: currentY });
@@ -399,23 +1002,25 @@
   }
 
   function update(delta) {
+    if (!unlocked || !conceptSeen || countdownValue !== null) return;
+
     if (usesNetwork()) {
       if (side !== 'left') {
-        player.y += (remoteTarget.py - player.y) * 0.4;
+        player.y += (remoteTarget.py - player.y) * 0.45;
       }
       if (side !== 'right') {
-        cpu.y += (remoteTarget.cy - cpu.y) * 0.4;
+        cpu.y += (remoteTarget.cy - cpu.y) * 0.45;
       }
       if (ball.vx !== 0 || ball.vy !== 0) {
         ball.x += ball.vx * delta;
         ball.y += ball.vy * delta;
       }
-      ball.x += (remoteTarget.bx - ball.x) * 0.35;
-      ball.y += (remoteTarget.by - ball.y) * 0.35;
+      ball.x += (remoteTarget.bx - ball.x) * 0.4;
+      ball.y += (remoteTarget.by - ball.y) * 0.4;
       recordTrail();
     }
 
-    if (!matchReady || paused) return;
+    if (paused || (!twoLaptopsMode && !matchReady)) return;
 
     if (twoLaptopsMode) {
       const leftDir = ((keys.has('s') || keys.has('S')) ? 1 : 0) - ((keys.has('w') || keys.has('W')) ? 1 : 0);
@@ -433,24 +1038,8 @@
         return;
       }
 
-      ball.x += ball.vx * delta;
-      ball.y += ball.vy * delta;
+      stepLocalBall(delta);
       recordTrail();
-
-      if (ball.y - BALL_RADIUS <= 0 && ball.vy < 0) {
-        ball.y = BALL_RADIUS; ball.vy *= -1; playTone(260, 0.025);
-      } else if (ball.y + BALL_RADIUS >= HEIGHT && ball.vy > 0) {
-        ball.y = HEIGHT - BALL_RADIUS; ball.vy *= -1; playTone(260, 0.025);
-      }
-
-      if (ball.vx < 0 && ball.x - BALL_RADIUS <= player.x + PADDLE_WIDTH && ball.x > player.x && ball.y + BALL_RADIUS >= player.y && ball.y - BALL_RADIUS <= player.y + PADDLE_HEIGHT) {
-        hitPaddleLocal(player, 1);
-      } else if (ball.vx > 0 && ball.x + BALL_RADIUS >= cpu.x && ball.x < cpu.x + PADDLE_WIDTH && ball.y + BALL_RADIUS >= cpu.y && ball.y - BALL_RADIUS <= cpu.y + PADDLE_HEIGHT) {
-        hitPaddleLocal(cpu, -1);
-      }
-
-      if (ball.x < -BALL_RADIUS) scorePointLocal(false);
-      else if (ball.x > WIDTH + BALL_RADIUS) scorePointLocal(true);
       return;
     }
 
@@ -564,7 +1153,7 @@
   }
 
   function movePaddleByPointer(event) {
-    if (!matchReady || paused || side === 'spectator') return;
+    if (!unlocked || !conceptSeen || countdownValue !== null || paused || (!twoLaptopsMode && (!matchReady || side === 'spectator'))) return;
     const bounds = canvas.getBoundingClientRect();
     const scaleY = HEIGHT / bounds.height;
     const virtualY = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, (event.clientY - bounds.top) * scaleY - PADDLE_HEIGHT / 2));
@@ -580,26 +1169,6 @@
     else if (side === 'right') { cpu.y = virtualY; emitPaddle(); }
   }
 
-  function setPseudoFullscreen(active) {
-    stage.classList.toggle('pseudo-fs', active);
-  }
-
-  function toggleFullscreen() {
-    if (stage.classList.contains('pseudo-fs')) {
-      setPseudoFullscreen(false);
-      return;
-    }
-    if (document.fullscreenElement) {
-      document.exitFullscreen?.().catch(() => {});
-      return;
-    }
-    if (stage.requestFullscreen) {
-      stage.requestFullscreen().catch(() => setPseudoFullscreen(true));
-    } else {
-      setPseudoFullscreen(true);
-    }
-  }
-
   function bindHoldButton(btn, setter) {
     const start = (e) => { e.preventDefault(); setter(true); btn.classList.add('active'); };
     const end = () => { setter(false); btn.classList.remove('active'); };
@@ -613,6 +1182,7 @@
   bindHoldButton(touchDown, (v) => { holdDown = v; });
 
   function resetMatchVisuals() {
+    clearCountdown(true);
     playerScore = 0;
     cpuScore = 0;
     gameOver = false;
@@ -634,6 +1204,7 @@
   }
 
   function setTwoLaptopsMode(enabled) {
+    if (!unlocked || !conceptSeen) return;
     twoLaptopsMode = enabled;
     if (enabled) onlineLaptopsMode = false;
     resetMatchVisuals();
@@ -644,6 +1215,7 @@
         ws.close();
         ws = null;
       }
+      lockArenaFullscreen(true);
       syncOverlayAndControls();
     } else {
       matchReady = false;
@@ -652,10 +1224,12 @@
   }
 
   function setOnlineLaptopsMode(enabled) {
+    if (!unlocked || !conceptSeen) return;
     onlineLaptopsMode = enabled;
     if (enabled) twoLaptopsMode = false;
     resetMatchVisuals();
     matchReady = false;
+    lockArenaFullscreen(true);
     connectRoom();
   }
 
@@ -664,6 +1238,7 @@
     if (ws) ws.close();
     const room = roomInput.value.trim() || '1000';
     roomInput.value = room;
+    serverCodeDisplay.textContent = room;
     lastSentPaddleY = null;
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${proto}//${location.host}/ws-pong?room=${encodeURIComponent(room)}`);
@@ -673,13 +1248,20 @@
       if (msg.type === 'welcome') {
         side = msg.side;
         playersCount = msg.players;
+        const wasReady = matchReady;
         matchReady = !!msg.ready;
+        if (matchReady && !wasReady && side !== 'spectator') {
+          lockArenaFullscreen(true);
+        }
         if (msg.state) applyServerState(msg.state);
         syncOverlayAndControls();
       } else if (msg.type === 'lobby') {
         playersCount = msg.players;
+        const wasReady = matchReady;
         matchReady = !!msg.ready;
-        if (!matchReady) {
+        if (matchReady && !wasReady && side !== 'spectator') {
+          lockArenaFullscreen(true);
+        } else if (!matchReady) {
           resetMatchVisuals();
         }
         syncOverlayAndControls();
@@ -687,22 +1269,36 @@
         if (msg.side === 'left' && side !== 'left') remoteTarget.py = msg.y;
         if (msg.side === 'right' && side !== 'right') remoteTarget.cy = msg.y;
       } else if (msg.type === 'state' && msg.state) {
-        const wasPaused = paused;
-        paused = !!msg.state.gameOver || (!matchReady);
-        if (!matchReady) paused = true;
-        else if (msg.state.vx !== 0 || msg.state.vy !== 0 || msg.state.pointPause > 0) {
-          if (!wasPaused || !overlay.hidden) paused = false;
+        if (msg.state.vx !== 0 || msg.state.vy !== 0 || msg.state.pointPause > 0) {
+          if (countdownValue === null && !msg.state.gameOver) paused = false;
         }
         applyServerState(msg.state);
         if (msg.sound) playTone(...msg.sound);
       } else if (msg.type === 'pause') {
         paused = !!msg.paused;
         syncOverlayAndControls();
+      } else if (msg.type === 'suggestion_saved') {
+        devStatus.textContent = 'Sent to the dev — thanks for testing!';
       }
     };
   }
 
+  testerNameInput.addEventListener('input', () => {
+    testerName = testerNameInput.value.trim();
+    try {
+      if (testerName) sessionStorage.setItem(PONG_TESTER_NAME_KEY, testerName);
+      else sessionStorage.removeItem(PONG_TESTER_NAME_KEY);
+    } catch (_) {}
+    refreshTesterLabels();
+  });
+
   window.addEventListener('keydown', (event) => {
+    if (
+      document.activeElement === devSuggestionInput ||
+      document.activeElement === testerNameInput ||
+      document.activeElement === roomInput ||
+      document.activeElement === passcodeInput
+    ) return;
     if (['ArrowUp', 'ArrowDown', 'w', 'W', 's', 'S'].includes(event.key)) {
       event.preventDefault();
       keys.add(event.key);
@@ -725,7 +1321,58 @@
     }
   });
 
-  document.getElementById('joinButton').addEventListener('click', () => {
+  passcodeSubmit.addEventListener('click', unlockWithPasscode);
+  passcodeInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      unlockWithPasscode();
+    }
+  });
+
+  startTestButton.addEventListener('click', finishConceptIntro);
+  closeConceptButton.addEventListener('click', finishConceptIntro);
+  testerNameInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      finishConceptIntro();
+    }
+  });
+
+  copyCodeButton.addEventListener('click', async () => {
+    const code = roomInput.value.trim() || '1000';
+    try {
+      await navigator.clipboard?.writeText(code);
+      copyCodeButton.textContent = 'Copied!';
+      setTimeout(() => { copyCodeButton.textContent = 'Copy Code'; }, 1600);
+    } catch (_) {}
+  });
+
+  newCodeButton.addEventListener('click', () => {
+    roomInput.value = generateRoomCode();
+    serverCodeDisplay.textContent = roomInput.value;
+    if (twoLaptopsMode) setTwoLaptopsMode(false);
+    else connectRoom();
+  });
+
+  modalTwoLaptopsButton.addEventListener('click', () => setTwoLaptopsMode(!twoLaptopsMode));
+
+  startGameButton.addEventListener('click', () => {
+    if (!twoLaptopsMode && (!matchReady || side === 'spectator')) return;
+    lockArenaFullscreen(true);
+    startMatchCountdown();
+  });
+
+  sendDevButton.addEventListener('click', submitSuggestionToDev);
+  devSuggestionInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      submitSuggestionToDev();
+    }
+  });
+
+  joinButton.addEventListener('click', () => {
+    if (!unlocked || !conceptSeen) return;
+    lockArenaFullscreen(true);
     if (twoLaptopsMode) setTwoLaptopsMode(false);
     else connectRoom();
   });
@@ -733,13 +1380,14 @@
   onlineLaptopsButton.addEventListener('click', () => setOnlineLaptopsMode(!onlineLaptopsMode));
   fullscreenButton.addEventListener('click', toggleFullscreen);
   overlayButton.addEventListener('click', () => {
-    if (!matchReady || side === 'spectator') return;
+    if (!unlocked || !conceptSeen || countdownValue !== null) return;
+    lockArenaFullscreen(true);
     if (gameOver) requestReset();
     else if (ball.vx === 0 && ball.vy === 0) requestServe();
     else setPaused(false);
   });
   pauseButton.addEventListener('click', () => {
-    if (!matchReady || side === 'spectator') return;
+    if (!unlocked || !conceptSeen || countdownValue !== null) return;
     if (gameOver) requestReset();
     else setPaused(!paused);
   });
@@ -749,7 +1397,11 @@
     if (soundEnabled) playTone(520, 0.07);
   });
 
-  connectRoom();
+  tryStartFullscreenOnce();
+  syncOverlayAndControls();
+  if (usesNetwork()) {
+    connectRoom();
+  }
   requestAnimationFrame(frame);
 })();
 </script>
