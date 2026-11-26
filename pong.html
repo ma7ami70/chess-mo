@@ -309,6 +309,7 @@ What if we actually put all those phones to some good use? Everyone gets to join
   const PONG_AUTH_KEY = 'chessmo_pong_auth';
   const PONG_INTRO_SEEN_KEY = 'chessmo_pong_intro_seen';
   const PONG_TESTER_NAME_KEY = 'chessmo_pong_tester_name';
+  const PONG_JOIN_SENT_KEY = 'chessmo_pong_join_sent';
 
   const stage = document.getElementById('stage');
   const canvas = document.getElementById('gameCanvas');
@@ -385,12 +386,16 @@ What if we actually put all those phones to some good use? Everyone gets to join
     if (testerName) testerNameInput.value = testerName;
   } catch (_) {}
 
+  let joinSentThisSession = false;
+  try { joinSentThisSession = sessionStorage.getItem(PONG_JOIN_SENT_KEY) === '1'; } catch (_) {}
+
   let side = 'left';
   let playersCount = 1;
   let matchReady = false;
   let twoLaptopsMode = false;
   let onlineLaptopsMode = false;
   let ws = null;
+  let pendingJoinPayload = null;
   let lastPaddleSent = 0;
   let lastSentPaddleY = null;
   let autoFullscreenAttempted = false;
@@ -451,6 +456,35 @@ What if we actually put all those phones to some good use? Everyone gets to join
     } else {
       devPrompt.innerHTML = `Since you're one of our <strong>early testers</strong>, we'd love to hear your opinion — leave a suggestion!`;
     }
+  }
+
+  function sendTesterEntered(nameValue) {
+    if (joinSentThisSession) return;
+    joinSentThisSession = true;
+    try { sessionStorage.setItem(PONG_JOIN_SENT_KEY, '1'); } catch (_) {}
+
+    const payload = {
+      type: 'tester_joined',
+      playerName: (nameValue || '').trim() || 'Anonymous',
+      room: roomInput.value.trim() || 'local',
+      side: twoLaptopsMode ? 'local' : side,
+      mode: currentModeName(),
+    };
+
+    if (usesNetwork() && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(payload));
+      return;
+    }
+
+    if (usesNetwork()) {
+      pendingJoinPayload = payload;
+    }
+
+    fetch('/api/tester-join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
   }
 
   function playTone(frequency = 440, duration = 0.045, type = 'sine') {
@@ -814,6 +848,7 @@ What if we actually put all those phones to some good use? Everyone gets to join
       else sessionStorage.removeItem(PONG_TESTER_NAME_KEY);
     } catch (_) {}
     conceptSeen = true;
+    sendTesterEntered(testerName);
     lockArenaFullscreen(true);
     syncOverlayAndControls();
     if (!twoLaptopsMode) connectRoom();
@@ -1242,6 +1277,12 @@ What if we actually put all those phones to some good use? Everyone gets to join
     lastSentPaddleY = null;
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${proto}//${location.host}/ws-pong?room=${encodeURIComponent(room)}`);
+    ws.onopen = () => {
+      if (pendingJoinPayload) {
+        ws.send(JSON.stringify({ ...pendingJoinPayload, room, side, mode: currentModeName() }));
+        pendingJoinPayload = null;
+      }
+    };
     ws.onmessage = (event) => {
       if (!usesNetwork()) return;
       const msg = JSON.parse(event.data);
