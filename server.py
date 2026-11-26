@@ -27,12 +27,25 @@ TICK_INTERVAL = 0.04  # 25 Hz server tick
 MAX_SUBSTEP = 0.01  # 10 ms physics sub-step
 
 
+def _clean_name(raw_name) -> str:
+    cleaned = " ".join(str(raw_name or "").split()).strip()[:40]
+    return cleaned or "Anonymous"
+
+
+def log_tester_entry(player_name, room_code: str = "", extra: dict | None = None):
+    clean_name = _clean_name(player_name)
+    room_str = str(room_code or "local")[:16]
+    side_str = str((extra or {}).get("side", ""))[:16]
+    mode_str = str((extra or {}).get("mode", ""))[:32]
+    details = ", ".join(part for part in (f"room {room_str}", mode_str, side_str) if part)
+    print(f"\n[TESTER ENTERED] {clean_name} ({details})\n", flush=True)
+
+
 def save_suggestion(text: str, room_code: str = "", extra: dict | None = None):
     cleaned = " ".join(str(text).split()).strip()[:500]
     if not cleaned:
         return None
-    raw_name = (extra or {}).get("playerName", "")
-    clean_name = " ".join(str(raw_name).split()).strip()[:40] or "Anonymous"
+    clean_name = _clean_name((extra or {}).get("playerName", ""))
     merged_extra = {**(extra or {}), "playerName": clean_name}
     entry = {
         "time": datetime.now(timezone.utc).isoformat(),
@@ -272,6 +285,23 @@ async def serve_pong(request):
     return web.FileResponse("./pong.html")
 
 
+async def post_tester_join(request):
+    try:
+        data = await request.json()
+    except ValueError:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+
+    log_tester_entry(
+        data.get("playerName", ""),
+        data.get("room", "local"),
+        {
+            "side": str(data.get("side", ""))[:16],
+            "mode": str(data.get("mode", ""))[:32],
+        },
+    )
+    return web.json_response({"ok": True})
+
+
 async def post_suggestion(request):
     try:
         data = await request.json()
@@ -397,6 +427,7 @@ async def ws_pong_handler(request):
     room.clients.add(ws)
     room.sides[ws] = side
     last_suggestion_at = 0.0
+    join_logged = False
 
     if not room.is_ready():
         room.reset_match_state(keep_scores=False)
@@ -451,6 +482,18 @@ async def ws_pong_handler(request):
                     room.serve()
                     await room.broadcast_state()
 
+                elif mtype == "tester_joined":
+                    if not join_logged:
+                        join_logged = True
+                        log_tester_entry(
+                            data.get("playerName", ""),
+                            data.get("room") or room_code,
+                            {
+                                "side": side,
+                                "mode": str(data.get("mode", ""))[:32],
+                            },
+                        )
+
                 elif mtype == "suggestion":
                     now = time.monotonic()
                     if now - last_suggestion_at < 3.0:
@@ -496,6 +539,7 @@ app.router.add_get("/", serve_index)
 app.router.add_get("/ws", ws_handler)
 app.router.add_get("/pong", serve_pong)
 app.router.add_get("/ws-pong", ws_pong_handler)
+app.router.add_post("/api/tester-join", post_tester_join)
 app.router.add_post("/api/suggestion", post_suggestion)
 
 if __name__ == "__main__":
