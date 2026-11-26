@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pong Duo — Two-Screen Arena</title>
+<style>
+  :root{color-scheme:dark;--bg:#090f1e;--panel:#101b34;--border:#263659;--muted:#8390ad;--cyan:#67f5df;--pink:#ff72ad;--text:#f5fbff}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100dvh;padding:12px;background:radial-gradient(circle at 50% 0,#152547 0,#070b16 70%);color:var(--text);font:14px/1.35 system-ui,-apple-system,Segoe UI,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;touch-action:none;user-select:none;-webkit-user-select:none}
+  .top-bar{width:min(100%,1120px);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:var(--panel);border:1px solid var(--border);border-radius:12px}
+  .brand{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .brand strong{font-size:15px;letter-spacing:.4px}
+  .meta{color:var(--muted);font-size:12px}
+  .actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  input,select,button{font:inherit;border-radius:9px;min-height:42px;padding:8px 12px;color:var(--text)}
+  input,select{background:#091124;border:1px solid var(--border)}
+  button{background:#182747;border:1px solid #354b7a;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;touch-action:manipulation}
+  button:active:not(:disabled){transform:scale(.98)}
+  button:hover:not(:disabled){border-color:var(--cyan)}
+  button:disabled{opacity:.42;cursor:not-allowed}
+  button.primary{background:var(--cyan);color:#06131c;border-color:var(--cyan)}
+  button.is-muted{opacity:.65}
+  .stage{width:min(100%,1120px);aspect-ratio:16/9;max-height:62dvh;position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--border);box-shadow:0 22px 55px #000b;background:#090f1e}
+  .stage:fullscreen,.stage.pseudo-fs{position:fixed;inset:0;width:100vw;height:100dvh;max-height:none;aspect-ratio:auto;border-radius:0;border:0;z-index:50}
+  .fs-exit-btn{display:none}
+  .hud{position:absolute;top:10px;left:16px;right:16px;display:flex;align-items:flex-start;justify-content:space-between;pointer-events:none;z-index:2}
+  .side-tag{font-size:11px;letter-spacing:1.1px;text-transform:uppercase;font-weight:700}
+  .side-tag.left-c{color:var(--cyan)}
+  .side-tag.right-c{color:var(--pink)}
+  .scoreboard{display:flex;align-items:center;gap:12px;font-size:clamp(24px,5vw,42px);font-weight:800;font-variant-numeric:tabular-nums}
+  .scoreboard span:first-child{color:var(--cyan)}
+  .scoreboard span:last-child{color:var(--pink)}
+  canvas{width:100%;height:100%;display:block}
+  .overlay{position:absolute;inset:0;background:#070c18e6;backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;gap:8px;z-index:3}
+  .overlay[hidden]{display:none}
+  .kicker{font-size:11px;letter-spacing:2px;font-weight:700;color:var(--cyan)}
+  .overlay h2{margin:0;font-size:clamp(20px,4vw,34px)}
+  .overlay p{margin:0 0 8px;color:var(--muted);max-width:420px;font-size:13px}
+  .touch-pad{display:grid;width:100%;max-width:1120px;grid-template-columns:1fr 1fr;gap:10px}
+  .touch-btn{min-height:56px;font-size:16px;font-weight:800;border-radius:12px;background:#13203d;border:1px solid #354b7a;color:var(--text)}
+  .touch-btn.active{background:var(--cyan);color:#06131c;border-color:var(--cyan)}
+</style>
+</head>
+<body>
+  <div class="top-bar">
+    <div class="brand">
+      <strong>PONG DUO</strong>
+      <span class="meta" id="statusLabel">Connecting…</span>
+    </div>
+    <div class="actions">
+      <input id="roomInput" type="text" maxlength="12" style="width:88px" placeholder="Room">
+      <button id="joinButton" type="button">Join</button>
+      <select id="viewSelect" aria-label="Court view">
+        <option value="split" selected>Split Half</option>
+        <option value="full">Full Court</option>
+      </select>
+      <button id="pauseButton" type="button"><span class="pause-symbol">Ⅱ</span> Pause</button>
+      <button id="soundButton" type="button" class="is-muted" aria-label="Toggle sound">Sound</button>
+      <button id="fullscreenButton" type="button" aria-label="Fullscreen">Fullscreen</button>
+    </div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="hud">
+      <div><div class="side-tag left-c">LEFT SCREEN</div></div>
+      <div class="scoreboard">
+        <span id="playerScore">0</span>
+        <span style="color:var(--muted);font-size:.65em">:</span>
+        <span id="cpuScore">0</span>
+      </div>
+      <div style="text-align:right"><div class="side-tag right-c">RIGHT SCREEN</div></div>
+    </div>
+
+    <canvas id="gameCanvas" width="1000" height="600"></canvas>
+
+    <div class="overlay" id="overlay">
+      <div class="kicker" id="overlayKicker">TWO-SCREEN LOBBY</div>
+      <h2 id="overlayTitle">Waiting for Player 2…</h2>
+      <p id="overlayText">Open /pong on the second phone and enter the same room code.</p>
+      <button class="primary" id="overlayButton" type="button" disabled>SERVE BALL →</button>
+    </div>
+  </div>
+
+  <div class="touch-pad" aria-label="Touch paddle controls">
+    <button class="touch-btn" id="touchUp" type="button">▲ MOVE UP</button>
+    <button class="touch-btn" id="touchDown" type="button">▼ MOVE DOWN</button>
+  </div>
+
+<script>
+(() => {
+  const stage = document.getElementById('stage');
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const playerScoreEl = document.getElementById('playerScore');
+  const cpuScoreEl = document.getElementById('cpuScore');
+  const statusLabel = document.getElementById('statusLabel');
+  const roomInput = document.getElementById('roomInput');
+  const viewSelect = document.getElementById('viewSelect');
+  const overlay = document.getElementById('overlay');
+  const overlayKicker = document.getElementById('overlayKicker');
+  const overlayTitle = document.getElementById('overlayTitle');
+  const overlayText = document.getElementById('overlayText');
+  const overlayButton = document.getElementById('overlayButton');
+  const pauseButton = document.getElementById('pauseButton');
+  const soundButton = document.getElementById('soundButton');
+  const fullscreenButton = document.getElementById('fullscreenButton');
+  const touchUp = document.getElementById('touchUp');
+  const touchDown = document.getElementById('touchDown');
+
+  const WIDTH = 2000;
+  const HEIGHT = 600;
+  const PADDLE_WIDTH = 12;
+  const PADDLE_HEIGHT = 94;
+  const BALL_RADIUS = 8;
+  const WINNING_SCORE = 7;
+
+  let side = 'left';
+  let playersCount = 1;
+  let matchReady = false;
+  let ws = null;
+  let lastPaddleSent = 0;
+
+  let playerScore = 0;
+  let cpuScore = 0;
+  let paused = false;
+  let gameOver = false;
+  let lastFrame = 0;
+  let pointPause = 0;
+  let soundEnabled = false;
+  let audioContext;
+  let holdUp = false;
+  let holdDown = false;
+
+  const player = { x: 30, y: HEIGHT / 2 - PADDLE_HEIGHT / 2, speed: 450 };
+  const cpu = { x: WIDTH - 30 - PADDLE_WIDTH, y: HEIGHT / 2 - PADDLE_HEIGHT / 2, speed: 450 };
+  const ball = { x: WIDTH / 2, y: HEIGHT / 2, vx: 0, vy: 0, speed: 430, trail: [], nextDirection: 1 };
+  const remoteTarget = { py: player.y, cy: cpu.y, bx: ball.x, by: ball.y };
+
+  roomInput.value = String(Math.floor(1000 + Math.random() * 9000));
+
+  function playTone(frequency = 440, duration = 0.045, type = 'sine') {
+    if (!soundEnabled) return;
+    try {
+      audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
+      if (audioContext.state === 'suspended') audioContext.resume();
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = type;
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.045, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + duration);
+    } catch (_) {
+      soundEnabled = false;
+    }
+  }
+
+  function sendWs(payload) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(payload));
+    }
+  }
+
+  function updateScore() {
+    playerScoreEl.textContent = playerScore;
+    cpuScoreEl.textContent = cpuScore;
+  }
+
+  function playerWonText(leftWon) {
+    return leftWon ? 'NICE PLAY' : 'GAME OVER';
+  }
+
+  function syncOverlayAndControls() {
+    const roleText = side === 'left' ? 'Left Screen' : side === 'right' ? 'Right Screen' : 'Spectator';
+    statusLabel.textContent = `Room ${roomInput.value} (${playersCount}/2) • ${roleText}`;
+
+    if (!matchReady) {
+      paused = true;
+      overlay.hidden = false;
+      overlayKicker.textContent = 'TWO-SCREEN LOBBY';
+      overlayTitle.textContent = `Waiting for Player 2 (${playersCount}/2)…`;
+      overlayText.textContent = `Join room ${roomInput.value} on the second phone to start.`;
+      overlayButton.disabled = true;
+      overlayButton.textContent = 'WAITING FOR PLAYER 2…';
+      return;
+    }
+
+    if (gameOver) {
+      const leftWon = playerScore >= WINNING_SCORE;
+      overlay.hidden = false;
+      overlayKicker.textContent = playerWonText(leftWon);
+      overlayTitle.textContent = leftWon ? 'Left wins!' : 'Right takes this one.';
+      overlayText.textContent = 'Tap below for another round.';
+      overlayButton.disabled = side !== 'left';
+      overlayButton.textContent = side === 'left' ? 'PLAY AGAIN ↻' : 'HOST REPLAYS';
+      pauseButton.innerHTML = '↻ Play Again';
+      return;
+    }
+
+    if (paused) {
+      overlay.hidden = false;
+      overlayKicker.textContent = 'GAME PAUSED';
+      overlayTitle.textContent = 'Take a breather.';
+      overlayText.textContent = 'Tap below when ready.';
+      overlayButton.disabled = false;
+      overlayButton.textContent = (ball.vx === 0 && ball.vy === 0 && side === 'left') ? 'SERVE BALL →' : 'RESUME GAME →';
+      pauseButton.innerHTML = '▶ Resume';
+    } else {
+      overlay.hidden = true;
+      pauseButton.innerHTML = '<span class="pause-symbol">Ⅱ</span> Pause';
+    }
+  }
+
+  function serve(direction = Math.random() < 0.5 ? -1 : 1) {
+    if (!matchReady || side !== 'left') return;
+    ball.x = WIDTH / 2;
+    ball.y = HEIGHT / 2;
+    remoteTarget.bx = ball.x;
+    remoteTarget.by = ball.y;
+    ball.speed = 430;
+    const angle = (Math.random() * 0.72 - 0.36);
+    ball.vx = Math.cos(angle) * ball.speed * direction;
+    ball.vy = Math.sin(angle) * ball.speed;
+    ball.trail = [];
+    sendWs({ type: 'state', state: snapshotState(), sound: [520, 0.05, 'sine'] });
+  }
+
+  function snapshotState() {
+    return {
+      py: player.y, cy: cpu.y, bx: ball.x, by: ball.y,
+      vx: ball.vx, vy: ball.vy, speed: ball.speed,
+      playerScore, cpuScore, pointPause, nextDirection: ball.nextDirection, gameOver
+    };
+  }
+
+  function applyRemoteState(s) {
+    if (side !== 'left') {
+      remoteTarget.bx = s.bx;
+      remoteTarget.by = s.by;
+      ball.vx = s.vx;
+      ball.vy = s.vy;
+      ball.speed = s.speed;
+      pointPause = s.pointPause;
+      ball.nextDirection = s.nextDirection;
+      player.y = s.py;
+    }
+    if (side !== 'right') cpu.y = s.cy;
+    playerScore = s.playerScore;
+    cpuScore = s.cpuScore;
+    gameOver = s.gameOver;
+    updateScore();
+    syncOverlayAndControls();
+  }
+
+  function finishGame(leftWon) {
+    gameOver = true;
+    paused = true;
+    playTone(leftWon ? 660 : 210, 0.22);
+    syncOverlayAndControls();
+    sendWs({ type: 'state', state: snapshotState() });
+  }
+
+  function resetGame() {
+    if (side !== 'left') return;
+    playerScore = 0; cpuScore = 0; gameOver = false; paused = false; pointPause = 0;
+    player.y = HEIGHT / 2 - PADDLE_HEIGHT / 2;
+    cpu.y = HEIGHT / 2 - PADDLE_HEIGHT / 2;
+    updateScore();
+    serve();
+    syncOverlayAndControls();
+  }
+
+  function setPaused(value) {
+    if (gameOver || !matchReady) return;
+    paused = value;
+    syncOverlayAndControls();
+    sendWs({ type: 'pause', paused });
+  }
+
+  function scorePoint(leftWonPoint) {
+    if (leftWonPoint) playerScore++;
+    else cpuScore++;
+    updateScore();
+    playTone(leftWonPoint ? 520 : 300, 0.12);
+    if (playerScore >= WINNING_SCORE || cpuScore >= WINNING_SCORE) {
+      finishGame(playerScore >= WINNING_SCORE);
+      return;
+    }
+    pointPause = 0.85;
+    ball.x = WIDTH / 2; ball.y = HEIGHT / 2; ball.vx = 0; ball.vy = 0; ball.trail = [];
+    ball.nextDirection = leftWonPoint ? 1 : -1;
+    sendWs({ type: 'state', state: snapshotState(), sound: [leftWonPoint ? 520 : 300, 0.12, 'sine'] });
+  }
+
+  function hitPaddle(paddle, direction) {
+    const relativeHit = (ball.y - (paddle.y + PADDLE_HEIGHT / 2)) / (PADDLE_HEIGHT / 2);
+    const angle = relativeHit * 0.95;
+    ball.speed = Math.min(ball.speed + 24, 700);
+    ball.vx = Math.cos(angle) * ball.speed * direction;
+    ball.vy = Math.sin(angle) * ball.speed;
+    ball.x = direction > 0 ? paddle.x + PADDLE_WIDTH + BALL_RADIUS : paddle.x - BALL_RADIUS;
+    playTone(420 + Math.abs(relativeHit) * 180, 0.04, 'square');
+    sendWs({ type: 'state', state: snapshotState(), sound: [420 + Math.abs(relativeHit) * 180, 0.04, 'square'] });
+  }
+
+  function emitPaddle() {
+    const now = performance.now();
+    if (now - lastPaddleSent < 16) return;
+    lastPaddleSent = now;
+    if (side === 'left') sendWs({ type: 'paddle', side: 'left', y: player.y });
+    if (side === 'right') sendWs({ type: 'paddle', side: 'right', y: cpu.y });
+  }
+
+  function update(delta) {
+    if (side !== 'left') {
+      player.y += (remoteTarget.py - player.y) * 0.35;
+      ball.x += (remoteTarget.bx - ball.x) * 0.45;
+      ball.y += (remoteTarget.by - ball.y) * 0.45;
+    }
+    if (side !== 'right') {
+      cpu.y += (remoteTarget.cy - cpu.y) * 0.35;
+    }
+
+    if (!matchReady || paused) return;
+
+    const dirY = (holdDown ? 1 : 0) - (holdUp ? 1 : 0);
+    if (dirY !== 0) {
+      if (side === 'left') {
+        player.y = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, player.y + dirY * player.speed * delta));
+        emitPaddle();
+      } else if (side === 'right') {
+        cpu.y = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, cpu.y + dirY * cpu.speed * delta));
+        emitPaddle();
+      }
+    }
+
+    if (side !== 'left') {
+      if (ball.vx !== 0 || ball.vy !== 0) {
+        ball.trail.unshift({ x: ball.x, y: ball.y });
+        if (ball.trail.length > 9) ball.trail.pop();
+      }
+      return;
+    }
+
+    if (pointPause > 0) {
+      pointPause -= delta;
+      if (pointPause <= 0) serve(ball.nextDirection);
+      return;
+    }
+
+    ball.x += ball.vx * delta;
+    ball.y += ball.vy * delta;
+    if (ball.vx !== 0 || ball.vy !== 0) {
+      ball.trail.unshift({ x: ball.x, y: ball.y });
+      if (ball.trail.length > 9) ball.trail.pop();
+    }
+
+    if (ball.y - BALL_RADIUS <= 0 && ball.vy < 0) {
+      ball.y = BALL_RADIUS; ball.vy *= -1; playTone(260, 0.025);
+    } else if (ball.y + BALL_RADIUS >= HEIGHT && ball.vy > 0) {
+      ball.y = HEIGHT - BALL_RADIUS; ball.vy *= -1; playTone(260, 0.025);
+    }
+
+    if (ball.vx < 0 && ball.x - BALL_RADIUS <= player.x + PADDLE_WIDTH && ball.x > player.x && ball.y + BALL_RADIUS >= player.y && ball.y - BALL_RADIUS <= player.y + PADDLE_HEIGHT) {
+      hitPaddle(player, 1);
+    } else if (ball.vx > 0 && ball.x + BALL_RADIUS >= cpu.x && ball.x < cpu.x + PADDLE_WIDTH && ball.y + BALL_RADIUS >= cpu.y && ball.y - BALL_RADIUS <= cpu.y + PADDLE_HEIGHT) {
+      hitPaddle(cpu, -1);
+    }
+
+    if (ball.x < -BALL_RADIUS) scorePoint(false);
+    else if (ball.x > WIDTH + BALL_RADIUS) scorePoint(true);
+
+    sendWs({ type: 'state', state: snapshotState() });
+  }
+
+  function drawPaddle(paddle, color) {
+    ctx.save();
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 17;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(paddle.x, paddle.y, PADDLE_WIDTH, PADDLE_HEIGHT, 6);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const full = viewSelect.value === 'full';
+    ctx.save();
+    if (full) ctx.scale(0.5, 1);
+    else if (side === 'right') ctx.translate(-1000, 0);
+
+    const background = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+    background.addColorStop(0, '#0c1428');
+    background.addColorStop(1, '#090f1e');
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    ctx.save();
+    ctx.setLineDash([8, 12]);
+    ctx.strokeStyle = '#28334e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(WIDTH / 2, 20);
+    ctx.lineTo(WIDTH / 2, HEIGHT - 20);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.arc(WIDTH / 2, HEIGHT / 2, 92, 0, Math.PI * 2);
+    ctx.strokeStyle = '#1c2742';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    drawPaddle(player, '#67f5df');
+    drawPaddle(cpu, '#ff72ad');
+
+    ball.trail.forEach((point, index) => {
+      ctx.globalAlpha = (1 - index / ball.trail.length) * 0.23;
+      ctx.fillStyle = '#f5fbff';
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, BALL_RADIUS * (1 - index / (ball.trail.length * 1.7)), 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    ctx.shadowColor = '#e6ffff';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = '#f5fbff';
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    if (pointPause > 0 && !paused && !gameOver) {
+      ctx.fillStyle = '#8390ad';
+      ctx.font = '12px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('NEXT SERVE', WIDTH / 2, HEIGHT / 2 + 47);
+    }
+    ctx.restore();
+  }
+
+  function frame(time) {
+    const delta = Math.min((time - lastFrame) / 1000 || 0, 0.035);
+    lastFrame = time;
+    update(delta);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  function moveMyPaddleToPointer(event) {
+    if (!matchReady || paused) return;
+    const bounds = canvas.getBoundingClientRect();
+    const scaleY = HEIGHT / bounds.height;
+    const virtualY = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, (event.clientY - bounds.top) * scaleY - PADDLE_HEIGHT / 2));
+    if (side === 'left') { player.y = virtualY; emitPaddle(); }
+    else if (side === 'right') { cpu.y = virtualY; emitPaddle(); }
+  }
+
+  function setPseudoFullscreen(active) {
+    stage.classList.toggle('pseudo-fs', active);
+  }
+
+  function toggleFullscreen() {
+    if (stage.classList.contains('pseudo-fs')) {
+      setPseudoFullscreen(false);
+      return;
+    }
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => {});
+      return;
+    }
+    if (stage.requestFullscreen) {
+      stage.requestFullscreen().catch(() => setPseudoFullscreen(true));
+    } else {
+      setPseudoFullscreen(true);
+    }
+  }
+
+  function bindHoldButton(btn, setter) {
+    const start = (e) => { e.preventDefault(); setter(true); btn.classList.add('active'); };
+    const end = () => { setter(false); btn.classList.remove('active'); };
+    btn.addEventListener('pointerdown', start);
+    btn.addEventListener('pointerup', end);
+    btn.addEventListener('pointercancel', end);
+    btn.addEventListener('pointerleave', end);
+  }
+
+  bindHoldButton(touchUp, (v) => { holdUp = v; });
+  bindHoldButton(touchDown, (v) => { holdDown = v; });
+
+  function connectRoom() {
+    if (ws) ws.close();
+    const room = roomInput.value.trim() || '1000';
+    roomInput.value = room;
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${proto}//${location.host}/ws-pong?room=${encodeURIComponent(room)}`);
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'welcome') {
+        side = msg.side;
+        playersCount = msg.players;
+        matchReady = !!msg.ready;
+        syncOverlayAndControls();
+      } else if (msg.type === 'lobby') {
+        playersCount = msg.players;
+        matchReady = !!msg.ready;
+        if (!matchReady) {
+          ball.vx = 0; ball.vy = 0; ball.x = WIDTH / 2; ball.y = HEIGHT / 2; ball.trail = [];
+        } else if (side === 'left' && ball.vx === 0 && ball.vy === 0) {
+          paused = true;
+        }
+        syncOverlayAndControls();
+      } else if (msg.type === 'paddle') {
+        if (msg.side === 'left') remoteTarget.py = msg.y;
+        if (msg.side === 'right') remoteTarget.cy = msg.y;
+      } else if (msg.type === 'state' && msg.state) {
+        applyRemoteState(msg.state);
+        if (msg.sound) playTone(...msg.sound);
+      } else if (msg.type === 'pause') {
+        paused = !!msg.paused;
+        syncOverlayAndControls();
+      }
+    };
+  }
+
+  canvas.addEventListener('pointerdown', (event) => {
+    canvas.setPointerCapture(event.pointerId);
+    moveMyPaddleToPointer(event);
+  });
+  canvas.addEventListener('pointermove', (event) => {
+    if (event.pointerType === 'touch' || event.pointerType === 'pen' || event.buttons > 0) {
+      moveMyPaddleToPointer(event);
+    }
+  });
+
+  document.getElementById('joinButton').addEventListener('click', connectRoom);
+  fullscreenButton.addEventListener('click', toggleFullscreen);
+  overlayButton.addEventListener('click', () => {
+    if (!matchReady) return;
+    if (gameOver) resetGame();
+    else if (side === 'left' && ball.vx === 0 && ball.vy === 0) { paused = false; serve(); syncOverlayAndControls(); }
+    else setPaused(false);
+  });
+  pauseButton.addEventListener('click', () => {
+    if (!matchReady) return;
+    if (gameOver) resetGame();
+    else setPaused(!paused);
+  });
+  soundButton.addEventListener('click', () => {
+    soundEnabled = !soundEnabled;
+    soundButton.classList.toggle('is-muted', !soundEnabled);
+    if (soundEnabled) playTone(520, 0.07);
+  });
+
+  connectRoom();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
