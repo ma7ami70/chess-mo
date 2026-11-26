@@ -21,6 +21,7 @@
   button:disabled{opacity:.42;cursor:not-allowed}
   button.primary{background:var(--cyan);color:#06131c;border-color:var(--cyan)}
   button.mode-active{background:var(--pink);color:#14060d;border-color:var(--pink)}
+  button.online-laptop-active{background:#7ea8ff;color:#071024;border-color:#7ea8ff}
   button.is-muted{opacity:.65}
   .stage{width:min(100%,1120px);aspect-ratio:16/9;max-height:62dvh;position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--border);box-shadow:0 22px 55px #000b;background:#090f1e}
   .stage:fullscreen,.stage.pseudo-fs{position:fixed;inset:0;width:100vw;height:100dvh;max-height:none;aspect-ratio:auto;border-radius:0;border:0;z-index:50}
@@ -53,6 +54,7 @@
       <input id="roomInput" type="text" maxlength="12" style="width:88px" placeholder="Room">
       <button id="joinButton" type="button">Join</button>
       <button id="twoLaptopsButton" type="button">2 Laptops</button>
+      <button id="onlineLaptopsButton" type="button">2 Online Laptops</button>
       <select id="viewSelect" aria-label="Court view">
         <option value="split" selected>Split Half</option>
         <option value="full">Full Court</option>
@@ -79,7 +81,7 @@
     <div class="overlay" id="overlay">
       <div class="kicker" id="overlayKicker">TWO-SCREEN LOBBY</div>
       <h2 id="overlayTitle">Waiting for Player 2…</h2>
-      <p id="overlayText">Open /pong on the second phone and enter the same room code.</p>
+      <p id="overlayText">Open /pong on the second screen and enter the same room code.</p>
       <button class="primary" id="overlayButton" type="button" disabled>SERVE BALL →</button>
     </div>
   </div>
@@ -99,6 +101,7 @@
   const statusLabel = document.getElementById('statusLabel');
   const roomInput = document.getElementById('roomInput');
   const twoLaptopsButton = document.getElementById('twoLaptopsButton');
+  const onlineLaptopsButton = document.getElementById('onlineLaptopsButton');
   const viewSelect = document.getElementById('viewSelect');
   const overlay = document.getElementById('overlay');
   const overlayKicker = document.getElementById('overlayKicker');
@@ -123,6 +126,7 @@
   let playersCount = 1;
   let matchReady = false;
   let twoLaptopsMode = false;
+  let onlineLaptopsMode = false;
   let ws = null;
   let lastPaddleSent = 0;
   let lastStateSent = 0;
@@ -145,6 +149,10 @@
   const remoteTarget = { py: player.y, cy: cpu.y, bx: ball.x, by: ball.y };
 
   roomInput.value = String(Math.floor(1000 + Math.random() * 9000));
+
+  function usesNetwork() {
+    return !twoLaptopsMode;
+  }
 
   function canSimulateBall() {
     return twoLaptopsMode || side === 'left';
@@ -171,7 +179,7 @@
   }
 
   function sendWs(payload) {
-    if (twoLaptopsMode) return;
+    if (!usesNetwork()) return;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(payload));
     }
@@ -186,7 +194,7 @@
   }
 
   function emitState(force = false, sound = null) {
-    if (twoLaptopsMode || side !== 'left') return;
+    if (!usesNetwork() || side !== 'left') return;
     const now = performance.now();
     if (!force && now - lastStateSent < STATE_SEND_INTERVAL_MS) return;
     lastStateSent = now;
@@ -207,6 +215,8 @@
   function syncOverlayAndControls() {
     twoLaptopsButton.classList.toggle('mode-active', twoLaptopsMode);
     twoLaptopsButton.textContent = twoLaptopsMode ? '2 Laptops: ON' : '2 Laptops';
+    onlineLaptopsButton.classList.toggle('online-laptop-active', onlineLaptopsMode && !twoLaptopsMode);
+    onlineLaptopsButton.textContent = onlineLaptopsMode ? '2 Online Laptops: ON' : '2 Online Laptops';
 
     if (twoLaptopsMode) {
       statusLabel.textContent = '2 Laptops Local • Left vs Right';
@@ -236,15 +246,16 @@
       return;
     }
 
-    const roleText = side === 'left' ? 'Left Screen' : side === 'right' ? 'Right Screen' : 'Spectator';
-    statusLabel.textContent = `Room ${roomInput.value} (${playersCount}/2) • ${roleText}`;
+    const roleText = side === 'left' ? 'Left Laptop' : side === 'right' ? 'Right Laptop' : 'Spectator';
+    const modePrefix = onlineLaptopsMode ? '2 Online Laptops' : '2-Screen Room';
+    statusLabel.textContent = `${modePrefix} • Room ${roomInput.value} (${playersCount}/2) • ${roleText}`;
 
     if (!matchReady) {
       paused = true;
       overlay.hidden = false;
-      overlayKicker.textContent = 'TWO-SCREEN LOBBY';
+      overlayKicker.textContent = onlineLaptopsMode ? '2 ONLINE LAPTOPS LOBBY' : 'TWO-SCREEN LOBBY';
       overlayTitle.textContent = `Waiting for Player 2 (${playersCount}/2)…`;
-      overlayText.textContent = `Join room ${roomInput.value} on the second phone to start.`;
+      overlayText.textContent = `Join room ${roomInput.value} on the second laptop to start.`;
       overlayButton.disabled = true;
       overlayButton.textContent = 'WAITING FOR PLAYER 2…';
       return;
@@ -363,7 +374,7 @@
   }
 
   function emitPaddle() {
-    if (twoLaptopsMode) return;
+    if (!usesNetwork()) return;
     const now = performance.now();
     if (now - lastPaddleSent < 16) return;
     lastPaddleSent = now;
@@ -372,7 +383,7 @@
   }
 
   function update(delta) {
-    if (!twoLaptopsMode) {
+    if (usesNetwork()) {
       if (side !== 'left') {
         player.y += (remoteTarget.py - player.y) * 0.35;
         ball.x += (remoteTarget.bx - ball.x) * 0.45;
@@ -393,6 +404,24 @@
       }
       if (rightDir !== 0) {
         cpu.y = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, cpu.y + rightDir * cpu.speed * delta));
+      }
+    } else if (onlineLaptopsMode) {
+      if (side === 'left') {
+        const leftKeyDir = ((keys.has('s') || keys.has('S')) ? 1 : 0) - ((keys.has('w') || keys.has('W')) ? 1 : 0);
+        const touchDir = (holdDown ? 1 : 0) - (holdUp ? 1 : 0);
+        const dirY = leftKeyDir !== 0 ? leftKeyDir : touchDir;
+        if (dirY !== 0) {
+          player.y = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, player.y + dirY * player.speed * delta));
+          emitPaddle();
+        }
+      } else if (side === 'right') {
+        const rightKeyDir = ((keys.has('ArrowDown')) ? 1 : 0) - ((keys.has('ArrowUp')) ? 1 : 0);
+        const touchDir = (holdDown ? 1 : 0) - (holdUp ? 1 : 0);
+        const dirY = rightKeyDir !== 0 ? rightKeyDir : touchDir;
+        if (dirY !== 0) {
+          cpu.y = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, cpu.y + dirY * cpu.speed * delta));
+          emitPaddle();
+        }
       }
     } else {
       const keyUp = keys.has('ArrowUp') || keys.has('w') || keys.has('W');
@@ -566,12 +595,12 @@
   bindHoldButton(touchUp, (v) => { holdUp = v; });
   bindHoldButton(touchDown, (v) => { holdDown = v; });
 
-  function setTwoLaptopsMode(enabled) {
-    twoLaptopsMode = enabled;
+  function resetMatchVisuals() {
     playerScore = 0;
     cpuScore = 0;
     gameOver = false;
     pointPause = 0;
+    paused = true;
     player.y = HEIGHT / 2 - PADDLE_HEIGHT / 2;
     cpu.y = HEIGHT / 2 - PADDLE_HEIGHT / 2;
     ball.x = WIDTH / 2;
@@ -580,10 +609,15 @@
     ball.vy = 0;
     ball.trail = [];
     updateScore();
+  }
+
+  function setTwoLaptopsMode(enabled) {
+    twoLaptopsMode = enabled;
+    if (enabled) onlineLaptopsMode = false;
+    resetMatchVisuals();
 
     if (twoLaptopsMode) {
       matchReady = true;
-      paused = true;
       if (ws) {
         ws.close();
         ws = null;
@@ -591,20 +625,27 @@
       syncOverlayAndControls();
     } else {
       matchReady = false;
-      paused = true;
       connectRoom();
     }
   }
 
+  function setOnlineLaptopsMode(enabled) {
+    onlineLaptopsMode = enabled;
+    if (enabled) twoLaptopsMode = false;
+    resetMatchVisuals();
+    matchReady = false;
+    connectRoom();
+  }
+
   function connectRoom() {
-    if (twoLaptopsMode) return;
+    if (!usesNetwork()) return;
     if (ws) ws.close();
     const room = roomInput.value.trim() || '1000';
     roomInput.value = room;
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${proto}//${location.host}/ws-pong?room=${encodeURIComponent(room)}`);
     ws.onmessage = (event) => {
-      if (twoLaptopsMode) return;
+      if (!usesNetwork()) return;
       const msg = JSON.parse(event.data);
       if (msg.type === 'welcome') {
         side = msg.side;
@@ -661,6 +702,7 @@
     else connectRoom();
   });
   twoLaptopsButton.addEventListener('click', () => setTwoLaptopsMode(!twoLaptopsMode));
+  onlineLaptopsButton.addEventListener('click', () => setOnlineLaptopsMode(!onlineLaptopsMode));
   fullscreenButton.addEventListener('click', toggleFullscreen);
   overlayButton.addEventListener('click', () => {
     if (!matchReady) return;
