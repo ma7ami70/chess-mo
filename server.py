@@ -23,7 +23,7 @@ PADDLE_LEFT_X = 30
 PADDLE_RIGHT_X = PONG_WIDTH - 30 - PADDLE_WIDTH
 BALL_RADIUS = 8
 WINNING_SCORE = 7
-TICK_INTERVAL = 0.04  # 25 Hz server tick
+TICK_INTERVAL = 1 / 30  # 30 Hz server tick
 MAX_SUBSTEP = 0.01  # 10 ms physics sub-step
 
 

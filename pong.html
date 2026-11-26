@@ -43,7 +43,7 @@
   .scoreboard span:last-child{color:var(--pink)}
   canvas{width:100%;height:100%;display:block}
   .overlay{position:absolute;inset:0;background:#070c18f0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:18px;gap:8px;z-index:3}
-  .overlay.modal-backdrop{background:rgba(7,12,24,.78);backdrop-filter:blur(3px)}
+  .overlay.modal-backdrop{background:rgba(7,12,24,.88)}
   .overlay[hidden]{display:none}
   .kicker{font-size:11px;letter-spacing:2px;font-weight:700;color:var(--cyan)}
   .overlay h2{margin:0;font-size:clamp(20px,4vw,34px)}
@@ -187,6 +187,23 @@
     border:1px solid var(--cyan);
     color:var(--cyan);
   }
+  .modal-code-edit{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    width:100%;
+    max-width:300px;
+  }
+  .modal-code-input{
+    width:130px;
+    text-align:center;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-weight:700;
+    letter-spacing:2px;
+    user-select:text;
+    -webkit-user-select:text;
+  }
   .server-code-row{
     display:flex;
     align-items:center;
@@ -274,6 +291,10 @@ What if we actually put all those phones to some good use? Everyone gets to join
         <h2 id="serverPopupTitle">Room Ready</h2>
         <p id="serverPopupText">Share this code with your friend so 2 players join the room.</p>
         <div class="server-code-pill" id="serverCodeDisplay">1000</div>
+        <div class="modal-code-edit">
+          <input id="modalRoomInput" class="modal-code-input" type="text" maxlength="12" placeholder="Enter code">
+          <button id="modalJoinCodeButton" type="button">Join Code</button>
+        </div>
         <div class="server-code-row">
           <button id="copyCodeButton" type="button">Copy Code</button>
           <button id="newCodeButton" type="button">New Code</button>
@@ -341,6 +362,8 @@ What if we actually put all those phones to some good use? Everyone gets to join
   const serverPopupTitle = document.getElementById('serverPopupTitle');
   const serverPopupText = document.getElementById('serverPopupText');
   const serverCodeDisplay = document.getElementById('serverCodeDisplay');
+  const modalRoomInput = document.getElementById('modalRoomInput');
+  const modalJoinCodeButton = document.getElementById('modalJoinCodeButton');
   const copyCodeButton = document.getElementById('copyCodeButton');
   const newCodeButton = document.getElementById('newCodeButton');
   const modalTwoLaptopsButton = document.getElementById('modalTwoLaptopsButton');
@@ -367,8 +390,8 @@ What if we actually put all those phones to some good use? Everyone gets to join
 
   const isTouchOrSmall = window.matchMedia('(max-width: 720px) or (pointer: coarse)').matches;
   const lowPower = isTouchOrSmall || !!navigator.connection?.saveData || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
-  const PADDLE_SEND_INTERVAL_MS = isTouchOrSmall ? 16 : 12;
-  const TRAIL_LENGTH = lowPower ? 3 : 7;
+  const PADDLE_SEND_INTERVAL_MS = isTouchOrSmall ? 18 : 14;
+  const TRAIL_LENGTH = lowPower ? 2 : 6;
 
   const courtGradient = ctx.createLinearGradient(0, 0, 0, HEIGHT);
   courtGradient.addColorStop(0, '#0c1428');
@@ -398,7 +421,6 @@ What if we actually put all those phones to some good use? Everyone gets to join
   let pendingJoinPayload = null;
   let lastPaddleSent = 0;
   let lastSentPaddleY = null;
-  let autoFullscreenAttempted = false;
   let needsFullscreenRelock = false;
   let conceptAnimatedOnce = false;
   let countdownTimer = null;
@@ -409,6 +431,7 @@ What if we actually put all those phones to some good use? Everyone gets to join
   let paused = true;
   let gameOver = false;
   let lastFrame = 0;
+  let lastRender = 0;
   let pointPause = 0;
   let soundEnabled = false;
   let audioContext;
@@ -425,8 +448,20 @@ What if we actually put all those phones to some good use? Everyone gets to join
     return String(Math.floor(1000 + Math.random() * 9000));
   }
 
-  roomInput.value = generateRoomCode();
-  serverCodeDisplay.textContent = roomInput.value;
+  const initialCode = generateRoomCode();
+  roomInput.value = initialCode;
+  modalRoomInput.value = initialCode;
+  serverCodeDisplay.textContent = initialCode;
+
+  function applyRoomCodeFromModal() {
+    if (!unlocked || !conceptSeen) return;
+    const chosen = modalRoomInput.value.trim() || roomInput.value.trim() || '1000';
+    roomInput.value = chosen;
+    modalRoomInput.value = chosen;
+    serverCodeDisplay.textContent = chosen;
+    if (twoLaptopsMode) setTwoLaptopsMode(false);
+    else connectRoom();
+  }
 
   function usesNetwork() {
     return unlocked && conceptSeen && !twoLaptopsMode;
@@ -563,6 +598,7 @@ What if we actually put all those phones to some good use? Everyone gets to join
   }
 
   function lockArenaFullscreen(force = false) {
+    if (!isTwoPlayerActive()) return Promise.resolve(false);
     if (!force && document.fullscreenElement) {
       needsFullscreenRelock = false;
       return Promise.resolve(true);
@@ -587,23 +623,13 @@ What if we actually put all those phones to some good use? Everyone gets to join
       });
   }
 
-  function enterStartFullscreen() {
-    if (document.fullscreenElement) return;
-    lockArenaFullscreen(true);
-  }
-
-  function tryStartFullscreenOnce() {
-    if (autoFullscreenAttempted) return;
-    autoFullscreenAttempted = true;
-    enterStartFullscreen();
-  }
-
   function toggleFullscreen() {
     if (document.fullscreenElement) {
       needsFullscreenRelock = false;
       document.exitFullscreen?.().catch(() => {});
       return;
     }
+    if (!isTwoPlayerActive()) return;
     lockArenaFullscreen(true);
   }
 
@@ -674,6 +700,9 @@ What if we actually put all those phones to some good use? Everyone gets to join
     refreshTesterLabels();
     const code = roomInput.value.trim() || '1000';
     serverCodeDisplay.textContent = code;
+    if (document.activeElement !== modalRoomInput) {
+      modalRoomInput.value = code;
+    }
     twoLaptopsButton.classList.toggle('mode-active', twoLaptopsMode);
     twoLaptopsButton.textContent = twoLaptopsMode ? '2 Laptops: ON' : '2 Laptops';
     modalTwoLaptopsButton.classList.toggle('mode-active', twoLaptopsMode);
@@ -828,7 +857,6 @@ What if we actually put all those phones to some good use? Everyone gets to join
       conceptSeen = false;
       passcodeError.textContent = '';
       try { sessionStorage.setItem(PONG_AUTH_KEY, '1'); } catch (_) {}
-      tryStartFullscreenOnce();
       syncOverlayAndControls();
       setTimeout(() => testerNameInput.focus(), 0);
     } else {
@@ -849,13 +877,17 @@ What if we actually put all those phones to some good use? Everyone gets to join
     } catch (_) {}
     conceptSeen = true;
     sendTesterEntered(testerName);
-    lockArenaFullscreen(true);
     syncOverlayAndControls();
     if (!twoLaptopsMode) connectRoom();
   }
 
   function applyServerState(s) {
     if (!s || twoLaptopsMode) return;
+    const prevScoreP = playerScore;
+    const prevScoreC = cpuScore;
+    const prevGameOver = gameOver;
+    const prevPaused = paused;
+
     remoteTarget.bx = s.bx;
     remoteTarget.by = s.by;
     ball.vx = s.vx;
@@ -882,8 +914,12 @@ What if we actually put all those phones to some good use? Everyone gets to join
       ball.y = s.by;
       ball.trail = [];
     }
-    updateScore();
-    syncOverlayAndControls();
+    if (playerScore !== prevScoreP || cpuScore !== prevScoreC) {
+      updateScore();
+    }
+    if (gameOver !== prevGameOver || paused !== prevPaused || (playerScore !== prevScoreP || cpuScore !== prevScoreC)) {
+      syncOverlayAndControls();
+    }
   }
 
   function requestServe() {
@@ -1156,19 +1192,31 @@ What if we actually put all those phones to some good use? Everyone gets to join
     drawPaddle(player, '#67f5df');
     drawPaddle(cpu, '#ff72ad');
 
-    for (let i = 0; i < ball.trail.length; i++) {
-      const point = ball.trail[i];
-      ctx.globalAlpha = (1 - i / ball.trail.length) * 0.2;
+    if (ball.trail.length > 0) {
       ctx.fillStyle = '#f5fbff';
+      for (let i = 0; i < ball.trail.length; i++) {
+        const point = ball.trail[i];
+        ctx.globalAlpha = (1 - i / ball.trail.length) * 0.2;
+        if (lowPower) {
+          const sz = BALL_RADIUS * 1.3 * (1 - i / (ball.trail.length * 1.5));
+          ctx.fillRect(point.x - sz * 0.5, point.y - sz * 0.5, sz, sz);
+        } else {
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, BALL_RADIUS * (1 - i / (ball.trail.length * 1.7)), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.fillStyle = '#f5fbff';
+    if (lowPower) {
+      ctx.fillRect(player.x === 30 ? ball.x - BALL_RADIUS : ball.x - BALL_RADIUS, ball.y - BALL_RADIUS, BALL_RADIUS * 2, BALL_RADIUS * 2);
+    } else {
       ctx.beginPath();
-      ctx.arc(point.x, point.y, BALL_RADIUS * (1 - i / (ball.trail.length * 1.7)), 0, Math.PI * 2);
+      ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = '#f5fbff';
-    ctx.beginPath();
-    ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
-    ctx.fill();
 
     if (pointPause > 0 && !paused && !gameOver) {
       ctx.fillStyle = '#8390ad';
@@ -1183,7 +1231,13 @@ What if we actually put all those phones to some good use? Everyone gets to join
     const delta = Math.min((time - lastFrame) / 1000 || 0, 0.035);
     lastFrame = time;
     update(delta);
-    draw();
+
+    const targetFps = (lowPower || paused || countdownValue !== null || !isTwoPlayerActive()) ? 30 : 60;
+    const minFrameMs = 1000 / targetFps;
+    if (time - lastRender >= minFrameMs - 0.5) {
+      lastRender = time;
+      draw();
+    }
     requestAnimationFrame(frame);
   }
 
@@ -1264,7 +1318,6 @@ What if we actually put all those phones to some good use? Everyone gets to join
     if (enabled) twoLaptopsMode = false;
     resetMatchVisuals();
     matchReady = false;
-    lockArenaFullscreen(true);
     connectRoom();
   }
 
@@ -1273,6 +1326,7 @@ What if we actually put all those phones to some good use? Everyone gets to join
     if (ws) ws.close();
     const room = roomInput.value.trim() || '1000';
     roomInput.value = room;
+    modalRoomInput.value = room;
     serverCodeDisplay.textContent = room;
     lastSentPaddleY = null;
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -1338,6 +1392,7 @@ What if we actually put all those phones to some good use? Everyone gets to join
       document.activeElement === devSuggestionInput ||
       document.activeElement === testerNameInput ||
       document.activeElement === roomInput ||
+      document.activeElement === modalRoomInput ||
       document.activeElement === passcodeInput
     ) return;
     if (['ArrowUp', 'ArrowDown', 'w', 'W', 's', 'S'].includes(event.key)) {
@@ -1379,6 +1434,14 @@ What if we actually put all those phones to some good use? Everyone gets to join
     }
   });
 
+  modalJoinCodeButton.addEventListener('click', applyRoomCodeFromModal);
+  modalRoomInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      applyRoomCodeFromModal();
+    }
+  });
+
   copyCodeButton.addEventListener('click', async () => {
     const code = roomInput.value.trim() || '1000';
     try {
@@ -1389,8 +1452,10 @@ What if we actually put all those phones to some good use? Everyone gets to join
   });
 
   newCodeButton.addEventListener('click', () => {
-    roomInput.value = generateRoomCode();
-    serverCodeDisplay.textContent = roomInput.value;
+    const nextCode = generateRoomCode();
+    roomInput.value = nextCode;
+    modalRoomInput.value = nextCode;
+    serverCodeDisplay.textContent = nextCode;
     if (twoLaptopsMode) setTwoLaptopsMode(false);
     else connectRoom();
   });
@@ -1413,7 +1478,6 @@ What if we actually put all those phones to some good use? Everyone gets to join
 
   joinButton.addEventListener('click', () => {
     if (!unlocked || !conceptSeen) return;
-    lockArenaFullscreen(true);
     if (twoLaptopsMode) setTwoLaptopsMode(false);
     else connectRoom();
   });
@@ -1438,7 +1502,6 @@ What if we actually put all those phones to some good use? Everyone gets to join
     if (soundEnabled) playTone(520, 0.07);
   });
 
-  tryStartFullscreenOnce();
   syncOverlayAndControls();
   if (usesNetwork()) {
     connectRoom();
