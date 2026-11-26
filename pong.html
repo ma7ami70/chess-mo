@@ -20,6 +20,7 @@
   button:hover:not(:disabled){border-color:var(--cyan)}
   button:disabled{opacity:.42;cursor:not-allowed}
   button.primary{background:var(--cyan);color:#06131c;border-color:var(--cyan)}
+  button.mode-active{background:var(--pink);color:#14060d;border-color:var(--pink)}
   button.is-muted{opacity:.65}
   .stage{width:min(100%,1120px);aspect-ratio:16/9;max-height:62dvh;position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--border);box-shadow:0 22px 55px #000b;background:#090f1e}
   .stage:fullscreen,.stage.pseudo-fs{position:fixed;inset:0;width:100vw;height:100dvh;max-height:none;aspect-ratio:auto;border-radius:0;border:0;z-index:50}
@@ -51,6 +52,7 @@
     <div class="actions">
       <input id="roomInput" type="text" maxlength="12" style="width:88px" placeholder="Room">
       <button id="joinButton" type="button">Join</button>
+      <button id="twoLaptopsButton" type="button">2 Laptops</button>
       <select id="viewSelect" aria-label="Court view">
         <option value="split" selected>Split Half</option>
         <option value="full">Full Court</option>
@@ -96,6 +98,7 @@
   const cpuScoreEl = document.getElementById('cpuScore');
   const statusLabel = document.getElementById('statusLabel');
   const roomInput = document.getElementById('roomInput');
+  const twoLaptopsButton = document.getElementById('twoLaptopsButton');
   const viewSelect = document.getElementById('viewSelect');
   const overlay = document.getElementById('overlay');
   const overlayKicker = document.getElementById('overlayKicker');
@@ -114,12 +117,15 @@
   const PADDLE_HEIGHT = 94;
   const BALL_RADIUS = 8;
   const WINNING_SCORE = 7;
+  const STATE_SEND_INTERVAL_MS = 33;
 
   let side = 'left';
   let playersCount = 1;
   let matchReady = false;
+  let twoLaptopsMode = false;
   let ws = null;
   let lastPaddleSent = 0;
+  let lastStateSent = 0;
 
   let playerScore = 0;
   let cpuScore = 0;
@@ -131,6 +137,7 @@
   let audioContext;
   let holdUp = false;
   let holdDown = false;
+  const keys = new Set();
 
   const player = { x: 30, y: HEIGHT / 2 - PADDLE_HEIGHT / 2, speed: 450 };
   const cpu = { x: WIDTH - 30 - PADDLE_WIDTH, y: HEIGHT / 2 - PADDLE_HEIGHT / 2, speed: 450 };
@@ -138,6 +145,10 @@
   const remoteTarget = { py: player.y, cy: cpu.y, bx: ball.x, by: ball.y };
 
   roomInput.value = String(Math.floor(1000 + Math.random() * 9000));
+
+  function canSimulateBall() {
+    return twoLaptopsMode || side === 'left';
+  }
 
   function playTone(frequency = 440, duration = 0.045, type = 'sine') {
     if (!soundEnabled) return;
@@ -160,9 +171,28 @@
   }
 
   function sendWs(payload) {
+    if (twoLaptopsMode) return;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(payload));
     }
+  }
+
+  function snapshotState() {
+    return {
+      py: player.y, cy: cpu.y, bx: ball.x, by: ball.y,
+      vx: ball.vx, vy: ball.vy, speed: ball.speed,
+      playerScore, cpuScore, pointPause, nextDirection: ball.nextDirection, gameOver
+    };
+  }
+
+  function emitState(force = false, sound = null) {
+    if (twoLaptopsMode || side !== 'left') return;
+    const now = performance.now();
+    if (!force && now - lastStateSent < STATE_SEND_INTERVAL_MS) return;
+    lastStateSent = now;
+    const payload = { type: 'state', state: snapshotState() };
+    if (sound) payload.sound = sound;
+    sendWs(payload);
   }
 
   function updateScore() {
@@ -175,6 +205,37 @@
   }
 
   function syncOverlayAndControls() {
+    twoLaptopsButton.classList.toggle('mode-active', twoLaptopsMode);
+    twoLaptopsButton.textContent = twoLaptopsMode ? '2 Laptops: ON' : '2 Laptops';
+
+    if (twoLaptopsMode) {
+      statusLabel.textContent = '2 Laptops Local • Left vs Right';
+      if (gameOver) {
+        const leftWon = playerScore >= WINNING_SCORE;
+        overlay.hidden = false;
+        overlayKicker.textContent = playerWonText(leftWon);
+        overlayTitle.textContent = leftWon ? 'Left wins!' : 'Right takes this one.';
+        overlayText.textContent = 'Tap below for another round.';
+        overlayButton.disabled = false;
+        overlayButton.textContent = 'PLAY AGAIN ↻';
+        pauseButton.innerHTML = '↻ Play Again';
+        return;
+      }
+      if (paused) {
+        overlay.hidden = false;
+        overlayKicker.textContent = '2 LAPTOPS MODE';
+        overlayTitle.textContent = 'Ready on both sides.';
+        overlayText.textContent = 'Tap below to serve and start.';
+        overlayButton.disabled = false;
+        overlayButton.textContent = (ball.vx === 0 && ball.vy === 0) ? 'SERVE BALL →' : 'RESUME GAME →';
+        pauseButton.innerHTML = '▶ Resume';
+      } else {
+        overlay.hidden = true;
+        pauseButton.innerHTML = '<span class="pause-symbol">Ⅱ</span> Pause';
+      }
+      return;
+    }
+
     const roleText = side === 'left' ? 'Left Screen' : side === 'right' ? 'Right Screen' : 'Spectator';
     statusLabel.textContent = `Room ${roomInput.value} (${playersCount}/2) • ${roleText}`;
 
@@ -216,7 +277,7 @@
   }
 
   function serve(direction = Math.random() < 0.5 ? -1 : 1) {
-    if (!matchReady || side !== 'left') return;
+    if (!matchReady || !canSimulateBall()) return;
     ball.x = WIDTH / 2;
     ball.y = HEIGHT / 2;
     remoteTarget.bx = ball.x;
@@ -226,18 +287,11 @@
     ball.vx = Math.cos(angle) * ball.speed * direction;
     ball.vy = Math.sin(angle) * ball.speed;
     ball.trail = [];
-    sendWs({ type: 'state', state: snapshotState(), sound: [520, 0.05, 'sine'] });
-  }
-
-  function snapshotState() {
-    return {
-      py: player.y, cy: cpu.y, bx: ball.x, by: ball.y,
-      vx: ball.vx, vy: ball.vy, speed: ball.speed,
-      playerScore, cpuScore, pointPause, nextDirection: ball.nextDirection, gameOver
-    };
+    emitState(true, [520, 0.05, 'sine']);
   }
 
   function applyRemoteState(s) {
+    if (twoLaptopsMode) return;
     if (side !== 'left') {
       remoteTarget.bx = s.bx;
       remoteTarget.by = s.by;
@@ -261,11 +315,11 @@
     paused = true;
     playTone(leftWon ? 660 : 210, 0.22);
     syncOverlayAndControls();
-    sendWs({ type: 'state', state: snapshotState() });
+    emitState(true);
   }
 
   function resetGame() {
-    if (side !== 'left') return;
+    if (!canSimulateBall()) return;
     playerScore = 0; cpuScore = 0; gameOver = false; paused = false; pointPause = 0;
     player.y = HEIGHT / 2 - PADDLE_HEIGHT / 2;
     cpu.y = HEIGHT / 2 - PADDLE_HEIGHT / 2;
@@ -293,7 +347,7 @@
     pointPause = 0.85;
     ball.x = WIDTH / 2; ball.y = HEIGHT / 2; ball.vx = 0; ball.vy = 0; ball.trail = [];
     ball.nextDirection = leftWonPoint ? 1 : -1;
-    sendWs({ type: 'state', state: snapshotState(), sound: [leftWonPoint ? 520 : 300, 0.12, 'sine'] });
+    emitState(true, [leftWonPoint ? 520 : 300, 0.12, 'sine']);
   }
 
   function hitPaddle(paddle, direction) {
@@ -303,11 +357,13 @@
     ball.vx = Math.cos(angle) * ball.speed * direction;
     ball.vy = Math.sin(angle) * ball.speed;
     ball.x = direction > 0 ? paddle.x + PADDLE_WIDTH + BALL_RADIUS : paddle.x - BALL_RADIUS;
-    playTone(420 + Math.abs(relativeHit) * 180, 0.04, 'square');
-    sendWs({ type: 'state', state: snapshotState(), sound: [420 + Math.abs(relativeHit) * 180, 0.04, 'square'] });
+    const toneFreq = 420 + Math.abs(relativeHit) * 180;
+    playTone(toneFreq, 0.04, 'square');
+    emitState(true, [toneFreq, 0.04, 'square']);
   }
 
   function emitPaddle() {
+    if (twoLaptopsMode) return;
     const now = performance.now();
     if (now - lastPaddleSent < 16) return;
     lastPaddleSent = now;
@@ -316,32 +372,47 @@
   }
 
   function update(delta) {
-    if (side !== 'left') {
-      player.y += (remoteTarget.py - player.y) * 0.35;
-      ball.x += (remoteTarget.bx - ball.x) * 0.45;
-      ball.y += (remoteTarget.by - ball.y) * 0.45;
-    }
-    if (side !== 'right') {
-      cpu.y += (remoteTarget.cy - cpu.y) * 0.35;
+    if (!twoLaptopsMode) {
+      if (side !== 'left') {
+        player.y += (remoteTarget.py - player.y) * 0.35;
+        ball.x += (remoteTarget.bx - ball.x) * 0.45;
+        ball.y += (remoteTarget.by - ball.y) * 0.45;
+      }
+      if (side !== 'right') {
+        cpu.y += (remoteTarget.cy - cpu.y) * 0.35;
+      }
     }
 
     if (!matchReady || paused) return;
 
-    const dirY = (holdDown ? 1 : 0) - (holdUp ? 1 : 0);
-    if (dirY !== 0) {
-      if (side === 'left') {
-        player.y = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, player.y + dirY * player.speed * delta));
-        emitPaddle();
-      } else if (side === 'right') {
-        cpu.y = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, cpu.y + dirY * cpu.speed * delta));
-        emitPaddle();
+    if (twoLaptopsMode) {
+      const leftDir = ((keys.has('s') || keys.has('S')) ? 1 : 0) - ((keys.has('w') || keys.has('W')) ? 1 : 0);
+      const rightDir = ((keys.has('ArrowDown')) ? 1 : 0) - ((keys.has('ArrowUp')) ? 1 : 0);
+      if (leftDir !== 0) {
+        player.y = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, player.y + leftDir * player.speed * delta));
+      }
+      if (rightDir !== 0) {
+        cpu.y = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, cpu.y + rightDir * cpu.speed * delta));
+      }
+    } else {
+      const keyUp = keys.has('ArrowUp') || keys.has('w') || keys.has('W');
+      const keyDown = keys.has('ArrowDown') || keys.has('s') || keys.has('S');
+      const dirY = ((holdDown || keyDown) ? 1 : 0) - ((holdUp || keyUp) ? 1 : 0);
+      if (dirY !== 0) {
+        if (side === 'left') {
+          player.y = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, player.y + dirY * player.speed * delta));
+          emitPaddle();
+        } else if (side === 'right') {
+          cpu.y = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, cpu.y + dirY * cpu.speed * delta));
+          emitPaddle();
+        }
       }
     }
 
-    if (side !== 'left') {
+    if (!canSimulateBall()) {
       if (ball.vx !== 0 || ball.vy !== 0) {
         ball.trail.unshift({ x: ball.x, y: ball.y });
-        if (ball.trail.length > 9) ball.trail.pop();
+        if (ball.trail.length > 7) ball.trail.pop();
       }
       return;
     }
@@ -356,7 +427,7 @@
     ball.y += ball.vy * delta;
     if (ball.vx !== 0 || ball.vy !== 0) {
       ball.trail.unshift({ x: ball.x, y: ball.y });
-      if (ball.trail.length > 9) ball.trail.pop();
+      if (ball.trail.length > 7) ball.trail.pop();
     }
 
     if (ball.y - BALL_RADIUS <= 0 && ball.vy < 0) {
@@ -374,23 +445,19 @@
     if (ball.x < -BALL_RADIUS) scorePoint(false);
     else if (ball.x > WIDTH + BALL_RADIUS) scorePoint(true);
 
-    sendWs({ type: 'state', state: snapshotState() });
+    emitState(false);
   }
 
   function drawPaddle(paddle, color) {
-    ctx.save();
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 17;
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.roundRect(paddle.x, paddle.y, PADDLE_WIDTH, PADDLE_HEIGHT, 6);
     ctx.fill();
-    ctx.restore();
   }
 
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const full = viewSelect.value === 'full';
+    const full = twoLaptopsMode || viewSelect.value === 'full';
     ctx.save();
     if (full) ctx.scale(0.5, 1);
     else if (side === 'right') ctx.translate(-1000, 0);
@@ -421,20 +488,17 @@
     drawPaddle(cpu, '#ff72ad');
 
     ball.trail.forEach((point, index) => {
-      ctx.globalAlpha = (1 - index / ball.trail.length) * 0.23;
+      ctx.globalAlpha = (1 - index / ball.trail.length) * 0.22;
       ctx.fillStyle = '#f5fbff';
       ctx.beginPath();
       ctx.arc(point.x, point.y, BALL_RADIUS * (1 - index / (ball.trail.length * 1.7)), 0, Math.PI * 2);
       ctx.fill();
     });
     ctx.globalAlpha = 1;
-    ctx.shadowColor = '#e6ffff';
-    ctx.shadowBlur = 18;
     ctx.fillStyle = '#f5fbff';
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
 
     if (pointPause > 0 && !paused && !gameOver) {
       ctx.fillStyle = '#8390ad';
@@ -453,11 +517,19 @@
     requestAnimationFrame(frame);
   }
 
-  function moveMyPaddleToPointer(event) {
+  function movePaddleByPointer(event) {
     if (!matchReady || paused) return;
     const bounds = canvas.getBoundingClientRect();
     const scaleY = HEIGHT / bounds.height;
     const virtualY = Math.max(0, Math.min(HEIGHT - PADDLE_HEIGHT, (event.clientY - bounds.top) * scaleY - PADDLE_HEIGHT / 2));
+
+    if (twoLaptopsMode) {
+      const relX = (event.clientX - bounds.left) / bounds.width;
+      if (relX < 0.5) player.y = virtualY;
+      else cpu.y = virtualY;
+      return;
+    }
+
     if (side === 'left') { player.y = virtualY; emitPaddle(); }
     else if (side === 'right') { cpu.y = virtualY; emitPaddle(); }
   }
@@ -494,13 +566,45 @@
   bindHoldButton(touchUp, (v) => { holdUp = v; });
   bindHoldButton(touchDown, (v) => { holdDown = v; });
 
+  function setTwoLaptopsMode(enabled) {
+    twoLaptopsMode = enabled;
+    playerScore = 0;
+    cpuScore = 0;
+    gameOver = false;
+    pointPause = 0;
+    player.y = HEIGHT / 2 - PADDLE_HEIGHT / 2;
+    cpu.y = HEIGHT / 2 - PADDLE_HEIGHT / 2;
+    ball.x = WIDTH / 2;
+    ball.y = HEIGHT / 2;
+    ball.vx = 0;
+    ball.vy = 0;
+    ball.trail = [];
+    updateScore();
+
+    if (twoLaptopsMode) {
+      matchReady = true;
+      paused = true;
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+      syncOverlayAndControls();
+    } else {
+      matchReady = false;
+      paused = true;
+      connectRoom();
+    }
+  }
+
   function connectRoom() {
+    if (twoLaptopsMode) return;
     if (ws) ws.close();
     const room = roomInput.value.trim() || '1000';
     roomInput.value = room;
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${proto}//${location.host}/ws-pong?room=${encodeURIComponent(room)}`);
     ws.onmessage = (event) => {
+      if (twoLaptopsMode) return;
       const msg = JSON.parse(event.data);
       if (msg.type === 'welcome') {
         side = msg.side;
@@ -529,22 +633,39 @@
     };
   }
 
+  window.addEventListener('keydown', (event) => {
+    if (['ArrowUp', 'ArrowDown', 'w', 'W', 's', 'S'].includes(event.key)) {
+      event.preventDefault();
+      keys.add(event.key);
+    }
+  });
+  window.addEventListener('keyup', (event) => {
+    keys.delete(event.key);
+  });
+  window.addEventListener('blur', () => {
+    keys.clear();
+  });
+
   canvas.addEventListener('pointerdown', (event) => {
     canvas.setPointerCapture(event.pointerId);
-    moveMyPaddleToPointer(event);
+    movePaddleByPointer(event);
   });
   canvas.addEventListener('pointermove', (event) => {
     if (event.pointerType === 'touch' || event.pointerType === 'pen' || event.buttons > 0) {
-      moveMyPaddleToPointer(event);
+      movePaddleByPointer(event);
     }
   });
 
-  document.getElementById('joinButton').addEventListener('click', connectRoom);
+  document.getElementById('joinButton').addEventListener('click', () => {
+    if (twoLaptopsMode) setTwoLaptopsMode(false);
+    else connectRoom();
+  });
+  twoLaptopsButton.addEventListener('click', () => setTwoLaptopsMode(!twoLaptopsMode));
   fullscreenButton.addEventListener('click', toggleFullscreen);
   overlayButton.addEventListener('click', () => {
     if (!matchReady) return;
     if (gameOver) resetGame();
-    else if (side === 'left' && ball.vx === 0 && ball.vy === 0) { paused = false; serve(); syncOverlayAndControls(); }
+    else if (canSimulateBall() && ball.vx === 0 && ball.vy === 0) { paused = false; serve(); syncOverlayAndControls(); }
     else setPaused(false);
   });
   pauseButton.addEventListener('click', () => {
