@@ -3,10 +3,15 @@ import os
 from aiohttp import web
 
 rooms = {}  # room_code -> {"clients": set(), "moves": [], "colors": {}}
+pong_rooms = {}  # room_code -> {"clients": set(), "sides": {}}
 
 
 async def serve_index(request):
     return web.FileResponse("./index.html")
+
+
+async def serve_pong(request):
+    return web.FileResponse("./pong.html")
 
 
 async def ws_handler(request):
@@ -89,9 +94,68 @@ async def ws_handler(request):
     return ws
 
 
+async def ws_pong_handler(request):
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+
+    room_code = (request.query.get("room") or "1000").strip()[:16] or "1000"
+    room = pong_rooms.setdefault(room_code, {"clients": set(), "sides": {}})
+
+    used = {room["sides"].get(c) for c in room["clients"]}
+    if "left" not in used:
+        side = "left"
+    elif "right" not in used:
+        side = "right"
+    else:
+        side = "spectator"
+
+    room["clients"].add(ws)
+    room["sides"][ws] = side
+
+    def count_players():
+        return sum(1 for s in room["sides"].values() if s in ("left", "right"))
+
+    async def broadcast_lobby():
+        players = count_players()
+        payload = {"type": "lobby", "players": players, "ready": players >= 2}
+        for peer in list(room["clients"]):
+            if not peer.closed:
+                await peer.send_json(payload)
+
+    await ws.send_json({
+        "type": "welcome",
+        "room": room_code,
+        "side": side,
+        "players": count_players(),
+        "ready": count_players() >= 2
+    })
+    await broadcast_lobby()
+
+    try:
+        async for msg in ws:
+            if msg.type == web.WSMsgType.TEXT:
+                data = json.loads(msg.data)
+                if data.get("type") == "state" and count_players() < 2:
+                    continue
+                for peer in list(room["clients"]):
+                    if peer is not ws and not peer.closed:
+                        await peer.send_json(data)
+    finally:
+        room["clients"].discard(ws)
+        room["sides"].pop(ws, None)
+        if not room["clients"]:
+            pong_rooms.pop(room_code, None)
+        else:
+            await broadcast_lobby()
+
+    return ws
+
+
 app = web.Application()
 app.router.add_get("/", serve_index)
 app.router.add_get("/ws", ws_handler)
+app.router.add_get("/pong", serve_pong)
+app.router.add_get("/ws-pong", ws_pong_handler)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
